@@ -3,7 +3,7 @@ use crate::detect::localdb::{self, DbStatus};
 use crate::process::{KillReport, ProcInfo};
 use crate::rules::Report;
 use crate::state::AppState;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Emitter, State};
 
 type R<T> = Result<T, String>;
 
@@ -87,8 +87,12 @@ pub async fn launch_app(handle: AppHandle, state: State<'_, AppState>, app_id: S
     })?;
     log::info!("[{app_id}] {msg}");
     if cfg.general.guard.enabled && !baseline.is_empty() {
-        log::info!("[{app_id}] 守护已开启，基准出口 {baseline}，间隔 {} 秒", cfg.general.guard.interval_sec);
-        crate::guard::start(handle, app_id, baseline);
+        log::info!(
+            "[{app_id}] 守护已开启，基准出口 {baseline}，快速复检 {} 秒 / 完整复检 {} 分钟",
+            cfg.general.guard.interval_sec, cfg.general.guard.full_check_minutes
+        );
+        state.guards.lock().unwrap().insert(app_id.clone(), crate::guard::AppGuard::launched(baseline));
+        let _ = handle.emit("guard", crate::guard::GuardEvent { app_id, kind: "watching".into(), message: "守护已开启".into() });
     }
     Ok(msg)
 }
@@ -96,8 +100,9 @@ pub async fn launch_app(handle: AppHandle, state: State<'_, AppState>, app_id: S
 #[tauri::command]
 pub async fn kill_app(handle: AppHandle, state: State<'_, AppState>, app_id: String) -> R<KillReport> {
     let app = state.app(&app_id)?;
-    crate::guard::stop(&handle, &app_id);
+    state.guards.lock().unwrap().remove(&app_id);
     log::info!("[{app_id}] 手动关闭");
+    let _ = handle.emit("guard", crate::guard::GuardEvent { app_id: app_id.clone(), kind: "stopped".into(), message: String::new() });
     Ok(crate::process::kill_all(&app.process).await)
 }
 

@@ -30,12 +30,15 @@ export default function Home({ appId, appName, active }: { appId: string; appNam
   useEffect(() => {
     const un = listen<{ app_id: string; kind: string; message: string }>("guard", (e) => {
       if (e.payload.app_id !== appId) return;
+      const time = new Date().toLocaleTimeString();
       if (e.payload.kind === "killed") {
-        setGuard("⚠ 守护已触发：" + e.payload.message);
+        setGuard(`⚠ ${time} 网络异常，已自动终止 ${appName}：${e.payload.message}`);
         setReport(null);
       } else if (e.payload.kind === "ok") {
-        setGuard(`守护中 · ${appName} 出口 ${e.payload.message} 正常`);
-      } else setGuard(e.payload.message);
+        setGuard(`🛡 守护中 · ${appName} 出口 ${e.payload.message} 正常（${time} 复检）`);
+      } else if (e.payload.kind === "stopped") {
+        setGuard(e.payload.message ? `${appName} 已退出，守护结束` : "");
+      } else setGuard(`🛡 ${e.payload.message}`);
     });
     return () => { un.then((f) => f()); };
   }, [appId, appName]);

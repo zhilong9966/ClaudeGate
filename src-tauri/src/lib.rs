@@ -12,7 +12,18 @@ mod state;
 
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
-use tauri::Manager;
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::{AppHandle, Manager, WindowEvent};
+
+/// 显示并聚焦主窗口（托盘点击、再次双击快捷方式时）
+fn show_main(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.unminimize();
+        let _ = w.show();
+        let _ = w.set_focus();
+    }
+}
 
 /// 启动时解析出的默认目录：(日志目录, 离线库目录)
 static DEFAULT_DIRS: OnceLock<(String, String)> = OnceLock::new();
@@ -27,7 +38,10 @@ pub(crate) fn default_dirs() -> (Option<String>, Option<String>) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // 只允许运行一个实例：再次打开时唤出已有窗口，避免两个守护同时工作
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_main(app)))
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             let dir = app.path().app_config_dir()?;
             let config_path = dir.join("config.json");
@@ -66,9 +80,44 @@ pub fn run() {
                 config_path,
                 cfg: Mutex::new(cfg),
                 reports: Mutex::new(HashMap::new()),
-                guard_gen: Mutex::new(HashMap::new()),
+                guards: Mutex::new(HashMap::new()),
             });
+
+            // 托盘：关闭窗口后守护继续在后台运行
+            let show = MenuItem::with_id(app, "show", "显示 PureGate", true, None::<&str>)?;
+            let quit = MenuItem::with_id(app, "quit", "退出 PureGate（停止守护）", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&show, &quit])?;
+            let mut tray = TrayIconBuilder::with_id("main")
+                .tooltip("PureGate 净启 · 网络守护中")
+                .menu(&menu)
+                .show_menu_on_left_click(false)
+                .on_menu_event(|app, e| match e.id.as_ref() {
+                    "show" => show_main(app),
+                    "quit" => app.exit(0),
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, e| {
+                    if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = e {
+                        show_main(tray.app_handle());
+                    }
+                });
+            if let Some(icon) = app.default_window_icon() {
+                tray = tray.icon(icon.clone());
+            }
+            tray.build(app)?;
+
+            guard::spawn_monitor(app.handle().clone());
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                let st = window.state::<state::AppState>();
+                if st.config().general.close_to_tray {
+                    api.prevent_close();
+                    let _ = window.hide();
+                    log::info!("主窗口已隐藏到托盘，守护继续运行");
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_config,

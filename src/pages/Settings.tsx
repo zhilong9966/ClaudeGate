@@ -79,13 +79,21 @@ export default function Settings({ onSaved }: { onSaved: () => void }) {
             <Check label="打开 PureGate 时自动检测当前标签" v={cfg.general.auto_check_on_open} on={(v) => up((c) => { c.general.auto_check_on_open = v; })} />
             <Check label="检测全部通过后自动启动应用" v={cfg.general.auto_launch_when_pass} on={(v) => up((c) => { c.general.auto_launch_when_pass = v; })} />
             <Check label="退出 PureGate 时同时关闭所有已启用的应用" v={cfg.general.kill_apps_on_exit} on={(v) => up((c) => { c.general.kill_apps_on_exit = v; })} />
+            <Check label="点关闭按钮时最小化到托盘（推荐，守护继续运行；从托盘菜单「退出」才真正退出）" v={cfg.general.close_to_tray} on={(v) => up((c) => { c.general.close_to_tray = v; })} />
             <ShortcutPanel />
-            <h3>运行期守护</h3>
-            <p className="sub">应用运行期间定时检测出口 IP，VPN 掉线 / 线路切换时立即结束该应用，防止直连裸奔。每个应用独立守护。</p>
-            <Check label="启用守护" v={cfg.general.guard.enabled} on={(v) => up((c) => { c.general.guard.enabled = v; })} />
-            <Num label="检测间隔（秒）" v={cfg.general.guard.interval_sec} on={(v) => up((c) => { c.general.guard.interval_sec = v; })} />
-            <Check label="出口 IP 变化时结束应用" v={cfg.general.guard.kill_on_ip_change} on={(v) => up((c) => { c.general.guard.kill_on_ip_change = v; })} />
-            <Check label="出口 IP 获取失败时结束应用" v={cfg.general.guard.kill_on_fail} on={(v) => up((c) => { c.general.guard.kill_on_fail = v; })} />
+            <h3>网络异常自动终止（运行期守护）</h3>
+            <p className="sub">
+              PureGate 运行期间（包括最小化到托盘时）持续监控受保护的应用。发现网络异常——VPN 掉线、出口 IP 变化、出口落到受限地区、
+              或硬性条件复检不通过——立即结束该应用的全部进程，并弹系统通知。每个应用独立守护。
+            </p>
+            <Check label="启用网络异常自动终止（默认开启）" v={cfg.general.guard.enabled} on={(v) => up((c) => { c.general.guard.enabled = v; })} />
+            <Num label="快速复检间隔（秒，检查出口 IP 与地区）" v={cfg.general.guard.interval_sec} on={(v) => up((c) => { c.general.guard.interval_sec = v; })} />
+            <Num label="完整复检间隔（分钟，按硬性条件重新检测；0 = 关闭）" v={cfg.general.guard.full_check_minutes} on={(v) => up((c) => { c.general.guard.full_check_minutes = v; })} />
+            <Check label="出口 IP 变化时终止" v={cfg.general.guard.kill_on_ip_change} on={(v) => up((c) => { c.general.guard.kill_on_ip_change = v; })} />
+            <Check label="出口 IP 获取失败时终止" v={cfg.general.guard.kill_on_fail} on={(v) => up((c) => { c.general.guard.kill_on_fail = v; })} />
+            <Num label="连续失败几次才终止（防止网络抖动误杀）" v={cfg.general.guard.fail_threshold} on={(v) => up((c) => { c.general.guard.fail_threshold = v; })} />
+            <Check label="也监控不是通过 PureGate 启动的应用（发现后立即完整检测，不通过就终止）" v={cfg.general.guard.monitor_external_launch} on={(v) => up((c) => { c.general.guard.monitor_external_launch = v; })} />
+            <Check label="终止时弹系统通知" v={cfg.general.guard.notify} on={(v) => up((c) => { c.general.guard.notify = v; })} />
             <h3>日志</h3>
             <p className="sub">记录启动、每次检测的每一项结果、启动 / 关闭的进程、守护触发、离线库更新和错误。每天一个文件：claudegate-日期.log。保存后立即生效。</p>
             <Text label="日志保存目录" v={cfg.general.log.dir} on={(v) => up((c) => { c.general.log.dir = v; })} />

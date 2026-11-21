@@ -24,6 +24,8 @@ pub struct General {
     pub auto_launch_when_pass: bool,
     /// 退出 PureGate 时结束所有已启用应用的进程
     pub kill_apps_on_exit: bool,
+    /// 点窗口关闭按钮时最小化到托盘（守护继续运行），而不是退出
+    pub close_to_tray: bool,
     pub guard: Guard,
     pub log: LogCfg,
 }
@@ -42,10 +44,20 @@ pub struct LogCfg {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Guard {
+    /// 网络异常自动终止：PureGate 运行期间持续监控受保护应用，发现异常立即结束它（默认开）
     pub enabled: bool,
+    /// 快速复检间隔（秒）：检查出口 IP 是否变化 / 能否获取 / 是否落在受限地区
     pub interval_sec: u64,
     pub kill_on_ip_change: bool,
     pub kill_on_fail: bool,
+    /// 出口 IP 连续获取失败多少次才终止（避免单次网络抖动误杀）
+    pub fail_threshold: u32,
+    /// 完整复检间隔（分钟），按该应用的硬性条件重新检测一遍；0 = 关闭
+    pub full_check_minutes: u64,
+    /// 也监控不是通过 PureGate 启动的应用（发现后立即完整检测一次，不通过就终止）
+    pub monitor_external_launch: bool,
+    /// 终止时弹系统通知
+    pub notify: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -220,7 +232,7 @@ impl Default for AppConfig {
 
 impl Default for General {
     fn default() -> Self {
-        Self { auto_check_on_open: false, auto_launch_when_pass: false, kill_apps_on_exit: false, guard: Guard::default(), log: LogCfg::default() }
+        Self { auto_check_on_open: false, auto_launch_when_pass: false, kill_apps_on_exit: false, close_to_tray: true, guard: Guard::default(), log: LogCfg::default() }
     }
 }
 
@@ -253,7 +265,16 @@ impl Default for LocalDbCfg {
 
 impl Default for Guard {
     fn default() -> Self {
-        Self { enabled: true, interval_sec: 30, kill_on_ip_change: true, kill_on_fail: true }
+        Self {
+            enabled: true,
+            interval_sec: 15,
+            kill_on_ip_change: true,
+            kill_on_fail: true,
+            fail_threshold: 2,
+            full_check_minutes: 5,
+            monitor_external_launch: true,
+            notify: true,
+        }
     }
 }
 

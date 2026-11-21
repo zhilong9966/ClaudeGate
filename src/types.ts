@@ -65,7 +65,11 @@ export interface AppConfig {
   version: number;
   general: {
     auto_check_on_open: boolean; auto_launch_when_pass: boolean; kill_apps_on_exit: boolean;
-    guard: { enabled: boolean; interval_sec: number; kill_on_ip_change: boolean; kill_on_fail: boolean };
+    close_to_tray: boolean;
+    guard: {
+      enabled: boolean; interval_sec: number; kill_on_ip_change: boolean; kill_on_fail: boolean;
+      fail_threshold: number; full_check_minutes: number; monitor_external_launch: boolean; notify: boolean;
+    };
     log: { dir: string; level: string; retention_days: number };
   };
   network: {
