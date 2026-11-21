@@ -1,4 +1,6 @@
-# ClaudeGate
+# ClaudeGate 给这些又爱又狠的IDE一个安全的使用环境
+<img width="1770" height="1289" alt="image" src="https://github.com/user-attachments/assets/cd607d56-12e4-4d8c-a084-b313fc90e293" />
+
 
 AI 桌面应用安全启动器（Windows / macOS）。支持 **Claude**、**Codex**、**Antigravity**，每个应用一个独立标签页。
 
