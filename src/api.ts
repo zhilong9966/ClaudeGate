@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AppConfig, KillReport, ProcInfo, Report } from "./types";
+import type { AppConfig, DbStatus, KillReport, ProcInfo, Report } from "./types";
 
 export const api = {
   getConfig: () => invoke<AppConfig>("get_config"),
@@ -10,4 +10,6 @@ export const api = {
   launch: (appId: string) => invoke<string>("launch_app", { appId }),
   kill: (appId: string) => invoke<KillReport>("kill_app", { appId }),
   listProcesses: (appId: string) => invoke<ProcInfo[]>("list_app_processes", { appId }),
+  geoDbStatus: () => invoke<DbStatus>("geo_db_status"),
+  updateGeoDb: (force: boolean) => invoke<string[]>("update_geo_db", { force }),
 };

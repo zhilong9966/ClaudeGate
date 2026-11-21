@@ -5,7 +5,7 @@ use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-pub const CONFIG_VERSION: u32 = 3;
+pub const CONFIG_VERSION: u32 = 4;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -25,6 +25,18 @@ pub struct General {
     /// 退出 ClaudeGate 时结束所有已启用应用的进程
     pub kill_apps_on_exit: bool,
     pub guard: Guard,
+    pub log: LogCfg,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LogCfg {
+    /// 日志目录；留空在启动时填为系统日志目录
+    pub dir: String,
+    /// info | debug
+    pub level: String,
+    /// 自动删除多少天前的日志，0 = 不删除
+    pub retention_days: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -43,9 +55,34 @@ pub struct Network {
     /// 留空 = 跟随系统；例如 http://127.0.0.1:7890 或 socks5://127.0.0.1:7891
     pub proxy: String,
     pub user_agent: String,
-    /// ipnetcoffee | ipapi_is
+    /// local（本地离线库，默认）| ipnetcoffee | ipapi_is
     pub risk_provider: String,
     pub endpoints: Endpoints,
+    pub local_db: LocalDbCfg,
+}
+
+/// 本地离线 IP 库：只下载数据文件，查询在本机完成，用户 IP 不外发
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LocalDbCfg {
+    /// 数据目录；留空在启动时填为应用数据目录下的 geo
+    pub dir: String,
+    /// 自动更新间隔（天），0 = 不自动更新
+    pub update_interval_days: u64,
+    /// 国家库（mmdb.gz），{yyyy}/{mm} 会替换为年月
+    pub country_url: String,
+    /// ASN 库（mmdb.gz）
+    pub asn_url: String,
+    /// 机房 IP 段
+    pub datacenter_list_url: String,
+    /// VPN IP 段
+    pub vpn_list_url: String,
+    /// Tor 出口节点
+    pub tor_list_url: String,
+    /// 恶意 / 滥用 IP 段
+    pub abuse_list_url: String,
+    /// ASN 组织名包含这些词即视为机房 / 云服务（补充 IP 段列表漏掉的 CDN、云厂商）
+    pub hosting_asn_keywords: Vec<String>,
 }
 
 /// 所有应用共用的检测端点
@@ -183,7 +220,34 @@ impl Default for AppConfig {
 
 impl Default for General {
     fn default() -> Self {
-        Self { auto_check_on_open: false, auto_launch_when_pass: false, kill_apps_on_exit: false, guard: Guard::default() }
+        Self { auto_check_on_open: false, auto_launch_when_pass: false, kill_apps_on_exit: false, guard: Guard::default(), log: LogCfg::default() }
+    }
+}
+
+impl Default for LogCfg {
+    fn default() -> Self {
+        Self { dir: String::new(), level: "info".into(), retention_days: 14 }
+    }
+}
+
+impl Default for LocalDbCfg {
+    fn default() -> Self {
+        Self {
+            dir: String::new(),
+            update_interval_days: 7,
+            country_url: "https://download.db-ip.com/free/dbip-country-lite-{yyyy}-{mm}.mmdb.gz".into(),
+            asn_url: "https://download.db-ip.com/free/dbip-asn-lite-{yyyy}-{mm}.mmdb.gz".into(),
+            datacenter_list_url: "https://raw.githubusercontent.com/X4BNet/lists_vpn/main/output/datacenter/ipv4.txt".into(),
+            vpn_list_url: "https://raw.githubusercontent.com/X4BNet/lists_vpn/main/output/vpn/ipv4.txt".into(),
+            tor_list_url: "https://check.torproject.org/torbulkexitlist".into(),
+            abuse_list_url: "https://raw.githubusercontent.com/firehol/blocklist-ipsets/master/firehol_level1.netset".into(),
+            hosting_asn_keywords: strs(&[
+                "hosting", "datacenter", "data center", "server", "vps", "colo", "cloud",
+                "Amazon", "Google", "Microsoft", "Cloudflare", "Akamai", "Fastly", "Oracle", "DigitalOcean",
+                "Linode", "Vultr", "Choopa", "OVH", "Hetzner", "Contabo", "Leaseweb", "M247", "Alibaba",
+                "Tencent", "Huawei Cloud", "DMIT", "BandwagonHost", "IT7", "Psychz", "QuadraNet", "Zenlayer",
+            ]),
+        }
     }
 }
 
@@ -199,8 +263,9 @@ impl Default for Network {
             timeout_ms: 8000,
             proxy: String::new(),
             user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36".into(),
-            risk_provider: "ipnetcoffee".into(),
+            risk_provider: "local".into(),
             endpoints: Endpoints::default(),
+            local_db: LocalDbCfg::default(),
         }
     }
 }
@@ -471,6 +536,11 @@ impl AppConfig {
         if cfg.version == 2 {
             cfg.migrate_v2();
         }
+        if cfg.version == 3 {
+            // v3 → v4：IP 属性与评分改用本地离线库（DNS 泄露仍用在线检测）
+            cfg.network.risk_provider = "local".into();
+            cfg.version = 4;
+        }
         for app in &mut cfg.apps {
             for (k, v) in default_checks(BLOCKED) {
                 app.checks.entry(k).or_insert(v);
@@ -501,7 +571,7 @@ impl AppConfig {
             }
             p.keep_standalone_cli = false;
         }
-        self.version = CONFIG_VERSION;
+        self.version = 3;
     }
 
     pub fn save(&self, path: &PathBuf) -> anyhow::Result<()> {
@@ -550,13 +620,14 @@ mod tests {
     fn migrate_v2_adds_cli_rules_and_keeps_user_rules() {
         let mut cfg = AppConfig::default();
         cfg.version = 2;
+        cfg.network.risk_provider = "ipnetcoffee".into();
         let claude = cfg.apps.iter_mut().find(|a| a.id == "claude").unwrap();
         claude.process.windows_rules.truncate(3); // v2 时只有桌面版规则
         claude.process.windows_rules.push(prule("custom.exe", &["X"])); // 用户自己加的
         claude.process.keep_standalone_cli = true;
         cfg.migrate_v2();
         let p = &cfg.app("claude").unwrap().process;
-        assert_eq!(cfg.version, CONFIG_VERSION);
+        assert_eq!(cfg.version, 3);
         assert!(!p.keep_standalone_cli);
         assert!(p.windows_rules.iter().any(|r| r.name == "custom.exe"));
         assert!(p.windows_rules.iter().any(|r| r.path_contains.iter().any(|s| s.contains("Anthropic.ClaudeCode"))));

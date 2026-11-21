@@ -54,15 +54,24 @@ export interface AppProfile {
   custom_sites: CustomSite[];
   process: ProcessCfg;
 }
+export interface LocalDbCfg {
+  dir: string; update_interval_days: number;
+  country_url: string; asn_url: string; datacenter_list_url: string; vpn_list_url: string;
+  tor_list_url: string; abuse_list_url: string; hosting_asn_keywords: string[];
+}
+export interface DbStatus { dir: string; files: { file: string; label: string; exists: boolean; size: number; updated: string }[] }
+
 export interface AppConfig {
   version: number;
   general: {
     auto_check_on_open: boolean; auto_launch_when_pass: boolean; kill_apps_on_exit: boolean;
     guard: { enabled: boolean; interval_sec: number; kill_on_ip_change: boolean; kill_on_fail: boolean };
+    log: { dir: string; level: string; retention_days: number };
   };
   network: {
     timeout_ms: number; proxy: string; user_agent: string; risk_provider: string;
     endpoints: Record<string, string | string[]>;
+    local_db: LocalDbCfg;
   };
   apps: AppProfile[];
 }

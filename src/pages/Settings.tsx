@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
-import type { AppConfig, AppProfile, CustomSite, ProcInfo, ProcessRule } from "../types";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import type { AppConfig, AppProfile, CustomSite, DbStatus, ProcInfo, ProcessRule } from "../types";
 import { CHECK_TITLES, EGRESS_MODES, PARAM_TITLES } from "../types";
 
 type Section = "general" | "network" | "launch" | "checks" | "egress" | "sites" | "process";
@@ -84,6 +85,12 @@ export default function Settings({ onSaved }: { onSaved: () => void }) {
             <Num label="检测间隔（秒）" v={cfg.general.guard.interval_sec} on={(v) => up((c) => { c.general.guard.interval_sec = v; })} />
             <Check label="出口 IP 变化时结束应用" v={cfg.general.guard.kill_on_ip_change} on={(v) => up((c) => { c.general.guard.kill_on_ip_change = v; })} />
             <Check label="出口 IP 获取失败时结束应用" v={cfg.general.guard.kill_on_fail} on={(v) => up((c) => { c.general.guard.kill_on_fail = v; })} />
+            <h3>日志</h3>
+            <p className="sub">记录启动、每次检测的每一项结果、启动 / 关闭的进程、守护触发、离线库更新和错误。每天一个文件：claudegate-日期.log。保存后立即生效。</p>
+            <Text label="日志保存目录" v={cfg.general.log.dir} on={(v) => up((c) => { c.general.log.dir = v; })} />
+            <Sel label="日志级别" v={cfg.general.log.level} opts={["info", "debug"]} labels={{ info: "info（常规）", debug: "debug（含守护每次复检，排查问题用）" }} on={(v) => up((c) => { c.general.log.level = v; })} />
+            <Num label="保留天数（0 = 不自动删除）" v={cfg.general.log.retention_days} on={(v) => up((c) => { c.general.log.retention_days = v; })} />
+            <button className="btn" onClick={() => revealItemInDir(cfg.general.log.dir).catch((e) => setMsg("打开失败：" + e))}>打开日志目录</button>
           </>
         )}
 
@@ -93,7 +100,11 @@ export default function Settings({ onSaved }: { onSaved: () => void }) {
             <Num label="超时（毫秒）" v={cfg.network.timeout_ms} on={(v) => up((c) => { c.network.timeout_ms = v; })} />
             <Text label="检测使用的代理（留空=系统/直连，如 socks5://127.0.0.1:7891）" v={cfg.network.proxy} on={(v) => up((c) => { c.network.proxy = v; })} />
             <Text label="User-Agent" v={cfg.network.user_agent} on={(v) => up((c) => { c.network.user_agent = v; })} />
-            <Sel label="IP 风险数据源" v={cfg.network.risk_provider} opts={["ipnetcoffee", "ipapi_is"]} on={(v) => up((c) => { c.network.risk_provider = v; })} />
+            <Sel label="IP 属性与评分数据源" v={cfg.network.risk_provider} opts={["local", "ipnetcoffee", "ipapi_is"]}
+              labels={{ local: "本地离线库（默认，IP 不外发）", ipnetcoffee: "ip.net.coffee（在线，第三方）", ipapi_is: "ipapi.is（在线，第三方）" }}
+              on={(v) => up((c) => { c.network.risk_provider = v; })} />
+            <p className="sub">DNS 泄露检测不受此项影响，始终使用在线检测（当前为 ip.net.coffee 的探测服务）。</p>
+            <LocalDbPanel cfg={cfg} up={up} />
             <h3>公共检测端点（所有应用共用）</h3>
             {Object.entries(cfg.network.endpoints).map(([k, v]) => (
               <label className="field" key={k}>
@@ -198,6 +209,59 @@ export default function Settings({ onSaved }: { onSaved: () => void }) {
         {section === "process" && <ProcessTab key={app.id} app={app} upApp={upApp} />}
       </section>
     </div>
+  );
+}
+
+function LocalDbPanel({ cfg, up }: { cfg: AppConfig; up: (fn: (c: AppConfig) => void) => void }) {
+  const [st, setSt] = useState<DbStatus | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<string[]>([]);
+  const db = cfg.network.local_db;
+  const refresh = () => api.geoDbStatus().then(setSt);
+  useEffect(() => { refresh(); }, []);
+
+  async function update(force: boolean) {
+    setBusy(true);
+    setResult([]);
+    try { setResult(await api.updateGeoDb(force)); } catch (e) { setResult([String(e)]); }
+    setBusy(false);
+    refresh();
+  }
+
+  const urls: [keyof typeof db, string][] = [
+    ["country_url", "国家库（mmdb.gz，{yyyy}/{mm} 自动替换）"], ["asn_url", "ASN 库（mmdb.gz）"],
+    ["datacenter_list_url", "机房 IP 段"], ["vpn_list_url", "VPN IP 段"],
+    ["tor_list_url", "Tor 出口节点"], ["abuse_list_url", "滥用 IP 段"],
+  ];
+  return (
+    <>
+      <h3>本地离线库</h3>
+      <p className="sub">只下载数据文件，查询在本机完成。国家 / ASN 数据来自 DB-IP Lite（CC BY 4.0）。信任分 = 100 − Tor 80 − 滥用 50 − 机房/云 40 − VPN 30。</p>
+      <Text label="离线库目录" v={db.dir} on={(v) => up((c) => { c.network.local_db.dir = v; })} />
+      <Num label="自动更新间隔（天，0 = 只在缺失时下载）" v={db.update_interval_days} on={(v) => up((c) => { c.network.local_db.update_interval_days = v; })} />
+      {urls.map(([k, label]) => (
+        <Text key={k} label={label} v={String(db[k])} on={(v) => up((c) => { (c.network.local_db as unknown as Record<string, unknown>)[k] = v; })} />
+      ))}
+      <label className="field"><span>机房 / 云厂商 ASN 关键词（逗号分隔，ASN 组织名包含即判为机房）</span>
+        <input defaultValue={csv(db.hosting_asn_keywords)} onBlur={(e) => up((c) => { c.network.local_db.hosting_asn_keywords = e.target.value.split(/[,，]/).map((x) => x.trim()).filter(Boolean); })} /></label>
+      {st && (
+        <table className="checks">
+          <thead><tr><th>文件</th><th>状态</th><th>大小</th><th>更新时间</th></tr></thead>
+          <tbody>{st.files.map((f) => (
+            <tr key={f.file}><td>{f.label}<div className="small">{f.file}</div></td>
+              <td>{f.exists ? <span className="tag ok">已就绪</span> : <span className="tag warn">未下载</span>}</td>
+              <td>{f.exists ? `${(f.size / 1024).toFixed(0)} KB` : "—"}</td><td>{f.updated || "—"}</td></tr>
+          ))}</tbody>
+        </table>
+      )}
+      <div className="contact-actions" style={{ marginTop: 10 }}>
+        <button className="btn" disabled={busy} onClick={() => update(false)}>{busy ? "更新中…" : "检查更新"}</button>
+        <button className="btn" disabled={busy} onClick={() => update(true)}>强制重新下载</button>
+        <button className="btn" onClick={() => revealItemInDir(db.dir).catch(() => {})}>打开目录</button>
+      </div>
+      {result.length > 0 && <div className="notice" style={{ marginTop: 10 }}>{result.map((r) => <div key={r}>{r}</div>)}</div>}
+      <p className="sub">修改目录或下载地址后请先「保存」，再点更新。</p>
+    </>
   );
 }
 

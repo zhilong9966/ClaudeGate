@@ -6,6 +6,7 @@ pub mod device;
 pub mod dns_leak;
 pub mod egress;
 pub mod iprisk;
+pub mod localdb;
 pub mod status;
 pub mod stun;
 pub mod trace;
@@ -39,9 +40,13 @@ pub async fn collect(cfg: &AppConfig, app: &AppProfile) -> Facts {
     };
     let ep = &cfg.network.endpoints;
     let on = |id: &str| app.rule(id).is_some();
+    let local = !matches!(cfg.network.risk_provider.as_str(), "ipnetcoffee" | "ipapi_is");
+    log::info!("[{}] 开始检测（IP 数据源: {}）", app.id, if local { "本地离线库" } else { cfg.network.risk_provider.as_str() });
 
     // 第一轮：互不依赖的检测并发执行
-    let (cn, cf, avail, st, dns, udp) = tokio::join!(
+    let (_, cn, cf, avail, st, dns, udp) = tokio::join!(
+        // 本地离线库缺失或过期时先下载（只下载数据文件，不发送任何 IP）
+        async { if local { localdb::update(&client, &cfg.network.local_db, false).await } else { vec![] } },
         cn_ip::fetch(&client, &ep.cn_ip),
         trace::fetch(&client, &ep.cf_trace),
         async {
@@ -52,20 +57,29 @@ pub async fn collect(cfg: &AppConfig, app: &AppProfile) -> Facts {
             }
         },
         async { if on("service_status") && !app.status_url.is_empty() { status::fetch(&client, &app.status_url).await.ok() } else { None } },
-        async { if on("dns_leak") { dns_leak::detect(&client, cfg, app).await.ok() } else { None } },
-        async { if on("udp_leak") { stun::detect(&ep.stun, cfg.network.timeout_ms).await.ok() } else { None } },
+        async { if on("dns_leak") { dns_leak::detect(&client, cfg, app).await.map_err(|e| log::warn!("[{}] DNS 泄露检测失败: {e}", app.id)).ok() } else { None } },
+        async { if on("udp_leak") { stun::detect(&ep.stun, cfg.network.timeout_ms).await.map_err(|e| log::warn!("[{}] UDP 出口检测失败: {e}", app.id)).ok() } else { None } },
     );
     let cf = cf.ok();
 
     // 第二轮：应用出口 IP（google_ecs 模式依赖 CF 出口）
     let (egress, egress_error) = match egress::fetch(&client, &app.egress, cf.as_ref()).await {
         Ok(e) => (Some(e), None),
-        Err(e) => (None, Some(e.to_string())),
+        Err(e) => {
+            log::warn!("[{}] 出口 IP 获取失败: {e}", app.id);
+            (None, Some(e.to_string()))
+        }
     };
 
     // 第三轮：依赖出口 IP 的检测
     let risk = match &egress {
-        Some(e) => iprisk::fetch(&client, cfg, &e.ip).await.ok(),
+        Some(e) => match iprisk::fetch(&client, cfg, &e.ip).await {
+            Ok(r) => Some(r),
+            Err(err) => {
+                log::warn!("[{}] IP 属性查询失败: {err}", app.id);
+                None
+            }
+        },
         None => None,
     };
     let mut egress = egress;

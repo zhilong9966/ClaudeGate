@@ -36,7 +36,8 @@ pub async fn fetch(client: &reqwest::Client, cfg: &AppConfig, ip: &str) -> anyho
     let ep = &cfg.network.endpoints;
     match cfg.network.risk_provider.as_str() {
         "ipapi_is" => ipapi_is(client, &ep.iprisk_ipapi_is.replace("{ip}", ip), ip).await,
-        _ => ipnetcoffee(client, &ep.iprisk_ipnetcoffee.replace("{ip}", ip), ip).await,
+        "ipnetcoffee" => ipnetcoffee(client, &ep.iprisk_ipnetcoffee.replace("{ip}", ip), ip).await,
+        _ => crate::detect::localdb::lookup(cfg, ip),
     }
 }
 
@@ -101,6 +102,9 @@ async fn ipapi_is(client: &reqwest::Client, url: &str, ip: &str) -> anyhow::Resu
 
 /// 仅取国家码，用于 DNS / UDP / 自定义站点 IP 的归属判断
 pub async fn country_of(client: &reqwest::Client, cfg: &AppConfig, ip: &str) -> Option<String> {
+    if !matches!(cfg.network.risk_provider.as_str(), "ipnetcoffee" | "ipapi_is") {
+        return crate::detect::localdb::country(cfg, ip);
+    }
     let url = cfg.network.endpoints.geoip.replace("{ip}", ip);
     let v: Value = client.get(url).send().await.ok()?.json().await.ok()?;
     let cc = s(&v, "country_code");

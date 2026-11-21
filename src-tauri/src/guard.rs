@@ -31,6 +31,7 @@ pub fn start(app: AppHandle, app_id: String, baseline_ip: String) {
                 return;
             }
             if !crate::process::is_running(&profile.process) {
+                log::info!("[{app_id}] 应用已退出，守护结束");
                 emit("stopped", format!("{} 已退出，守护结束", profile.name));
                 return;
             }
@@ -49,10 +50,12 @@ pub fn start(app: AppHandle, app_id: String, baseline_ip: String) {
                 Err(e) => Some(e.to_string()),
             };
             if let Some(msg) = reason {
+                log::warn!("[{app_id}] 守护触发：{msg}，开始结束进程");
                 let r = crate::process::kill_all(&profile.process).await;
                 emit("killed", format!("{msg}，已结束 {} 个进程", r.killed.len()));
                 return;
             }
+            log::debug!("[{app_id}] 守护复检正常，出口 {baseline_ip}");
             emit("ok", baseline_ip.clone());
         }
     });

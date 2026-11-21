@@ -156,6 +156,13 @@ pub async fn kill_all(cfg: &ProcessCfg) -> KillReport {
         tokio::time::sleep(Duration::from_millis(if graceful { cfg.graceful_timeout_ms } else { 500 })).await;
     }
     report.remaining = list(cfg);
+    for k in &report.killed {
+        log::info!("已结束进程 {} #{} {}", k.name, k.pid, k.path);
+    }
+    for r in &report.remaining {
+        log::warn!("进程残留 {} #{} {}", r.name, r.pid, r.path);
+    }
+    log::info!("关闭完成：结束 {} 个，残留 {} 个", report.killed.len(), report.remaining.len());
     report
 }
 

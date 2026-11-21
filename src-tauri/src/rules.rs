@@ -110,6 +110,10 @@ pub fn evaluate(app: &AppProfile, f: Facts) -> Report {
         ("crawler", "机器人 (Crawler)", risk.as_ref().and_then(|r| r.is_crawler)),
         ("abuser", "滥用记录", risk.as_ref().and_then(|r| r.is_abuser)),
     ] {
+        // 数据源本身不提供这一项（如本地离线库无法识别普通代理/爬虫）时跳过，不算"无数据"
+        if risk.is_some() && flag.is_none() {
+            continue;
+        }
         c.check(id, title, |_| flag.map(|v| (!v, if v { "检测到".into() } else { "未检测到".into() })));
     }
 

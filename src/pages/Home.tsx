@@ -120,7 +120,8 @@ export default function Home({ appId, appName, active }: { appId: string; appNam
               <Row label="地区">{f.risk?.country || "—"}</Row>
               <Row label="IP 属性">{f.risk?.is_residential ? <span className="tag ok">家庭住宅 IP</span> : <span className="tag warn">机房/其他</span>} ({f.risk?.company_type})</Row>
               <Row label="ASN">AS{f.risk?.asn ?? "—"}</Row>
-              <Row label="运营商">{f.risk?.as_org || "—"}</Row></div>
+              <Row label="运营商">{f.risk?.as_org || "—"}</Row>
+              <Row label="数据源">{f.risk?.provider || "—"}</Row></div>
             <div className="card"><div className="card-title">{appName} 出口 IP 安全检测</div>
               <Row label="VPN"><Flag v={f.risk?.is_vpn} /></Row>
               <Row label="代理 (Proxy)"><Flag v={f.risk?.is_proxy} /></Row>
