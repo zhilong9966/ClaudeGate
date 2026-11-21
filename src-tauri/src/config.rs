@@ -22,7 +22,7 @@ pub struct AppConfig {
 pub struct General {
     pub auto_check_on_open: bool,
     pub auto_launch_when_pass: bool,
-    /// 退出 ClaudeGate 时结束所有已启用应用的进程
+    /// 退出 PureGate 时结束所有已启用应用的进程
     pub kill_apps_on_exit: bool,
     pub guard: Guard,
     pub log: LogCfg,

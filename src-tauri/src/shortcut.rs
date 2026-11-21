@@ -41,7 +41,7 @@ fn target() -> anyhow::Result<PathBuf> {
 
 #[cfg(windows)]
 fn link_path() -> anyhow::Result<PathBuf> {
-    Ok(desktop_dir()?.join("ClaudeGate.lnk"))
+    Ok(desktop_dir()?.join("PureGate 净启.lnk"))
 }
 
 #[cfg(windows)]
@@ -52,13 +52,15 @@ pub fn create() -> anyhow::Result<ShortcutInfo> {
     let script = format!(
         "$s = (New-Object -ComObject WScript.Shell).CreateShortcut({lnk}); \
          $s.TargetPath = {exe}; $s.WorkingDirectory = {dir}; $s.IconLocation = {icon}; \
-         $s.Description = 'ClaudeGate - AI 桌面应用安全启动器'; $s.Save()",
+         $s.Description = 'PureGate 净启 - AI 桌面应用安全启动器'; $s.Save()",
         lnk = ps_quote(&lnk.to_string_lossy()),
         exe = ps_quote(&exe.to_string_lossy()),
         dir = ps_quote(&dir),
         icon = ps_quote(&format!("{},0", exe.to_string_lossy())),
     );
     powershell(&script)?;
+    // 改名前创建的旧快捷方式一并清理
+    let _ = std::fs::remove_file(desktop_dir()?.join("ClaudeGate.lnk"));
     log::info!("已创建桌面快捷方式 {} → {}", lnk.display(), exe.display());
     info()
 }
@@ -71,7 +73,7 @@ pub fn info() -> anyhow::Result<ShortcutInfo> {
 
 #[cfg(target_os = "macos")]
 fn target() -> anyhow::Result<PathBuf> {
-    // .../ClaudeGate.app/Contents/MacOS/claudegate → .../ClaudeGate.app
+    // .../PureGate.app/Contents/MacOS/claudegate → .../PureGate.app
     let exe = std::env::current_exe()?;
     Ok(exe.ancestors().find(|p| p.extension().map(|e| e == "app").unwrap_or(false)).map(|p| p.to_path_buf()).unwrap_or(exe))
 }
@@ -79,7 +81,7 @@ fn target() -> anyhow::Result<PathBuf> {
 #[cfg(target_os = "macos")]
 fn link_path() -> anyhow::Result<PathBuf> {
     let home = std::env::var("HOME")?;
-    Ok(PathBuf::from(home).join("Desktop").join("ClaudeGate"))
+    Ok(PathBuf::from(home).join("Desktop").join("PureGate 净启"))
 }
 
 #[cfg(target_os = "macos")]

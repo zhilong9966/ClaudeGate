@@ -1,5 +1,34 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <rect width="1024" height="1024" rx="220" fill="#1f2937"/>
-  <path d="M512 170 L790 290 V500 C790 680 670 800 512 860 C354 800 234 680 234 500 V290 Z" fill="#d97757"/>
-  <path d="M400 520 L480 600 L640 420" stroke="#fff" stroke-width="64" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#E8896A"/>
+      <stop offset="0.55" stop-color="#D97757"/>
+      <stop offset="1" stop-color="#C15F3C"/>
+    </linearGradient>
+    <linearGradient id="shield" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#FFF1EA"/>
+    </linearGradient>
+    <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.16"/>
+      <stop offset="0.45" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="18"/>
+    </filter>
+  </defs>
+
+  <!-- 橙色圆角底 -->
+  <rect width="1024" height="1024" rx="228" fill="url(#bg)"/>
+  <!-- 顶部柔光（渐变，无硬边） -->
+  <rect width="1024" height="1024" rx="228" fill="url(#gloss)"/>
+
+  <!-- 盾牌阴影 -->
+  <path d="M512 214 L774 318 C776 470 768 560 736 638 C690 748 606 818 512 856 C418 818 334 748 288 638 C256 560 248 470 250 318 Z"
+        fill="#7A2E14" opacity="0.28" filter="url(#shadow)" transform="translate(0 22)"/>
+  <!-- 白色盾牌 -->
+  <path d="M512 196 L774 300 C776 452 768 542 736 620 C690 730 606 800 512 838 C418 800 334 730 288 620 C256 542 248 452 250 300 Z"
+        fill="url(#shield)"/>
+  <!-- 检测通过的对勾 -->
+  <path d="M398 538 L484 624 L652 452" fill="none" stroke="#D2633D" stroke-width="76" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

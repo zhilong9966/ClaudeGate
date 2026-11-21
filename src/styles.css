@@ -77,3 +77,6 @@ td.params { display: flex; flex-wrap: wrap; gap: 8px 16px; }
 .solution-title { font-weight: 600; font-size: 14px; }
 .grid.two { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
 a { color: var(--accent); }
+.brand { display: flex; align-items: center; gap: 8px; }
+.brand b { font-weight: 700; color: var(--accent); }
+.brand .logo { width: 26px; height: 26px; border-radius: 6px; }

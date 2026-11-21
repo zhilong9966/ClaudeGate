@@ -45,7 +45,7 @@ pub fn run() {
             let _ = cfg.save(&config_path);
 
             logging::init(&cfg.general.log);
-            log::info!("===== ClaudeGate {} 启动（{} / {}） =====", app.package_info().version, std::env::consts::OS, std::env::consts::ARCH);
+            log::info!("===== PureGate 净启 {} 启动（{} / {}） =====", app.package_info().version, std::env::consts::OS, std::env::consts::ARCH);
             log::info!("配置文件 {}", config_path.display());
             log::info!("日志目录 {}，级别 {}，保留 {} 天", cfg.general.log.dir, cfg.general.log.level, cfg.general.log.retention_days);
             log::info!("IP 数据源 {}，离线库目录 {}", cfg.network.risk_provider, cfg.network.local_db.dir);
@@ -85,11 +85,11 @@ pub fn run() {
             commands::create_shortcut,
         ])
         .build(tauri::generate_context!())
-        .expect("error while building ClaudeGate")
+        .expect("error while building PureGate")
         .run(|app, event| {
             if let tauri::RunEvent::ExitRequested { .. } = event {
                 let cfg = app.state::<state::AppState>().config();
-                log::info!("ClaudeGate 退出（退出时关闭应用: {}）", cfg.general.kill_apps_on_exit);
+                log::info!("PureGate 退出（退出时关闭应用: {}）", cfg.general.kill_apps_on_exit);
                 if cfg.general.kill_apps_on_exit {
                     for a in cfg.apps.iter().filter(|a| a.enabled) {
                         tauri::async_runtime::block_on(process::kill_all(&a.process));

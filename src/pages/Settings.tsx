@@ -76,9 +76,9 @@ export default function Settings({ onSaved }: { onSaved: () => void }) {
         {section === "general" && (
           <>
             <h3>基础</h3>
-            <Check label="打开 ClaudeGate 时自动检测当前标签" v={cfg.general.auto_check_on_open} on={(v) => up((c) => { c.general.auto_check_on_open = v; })} />
+            <Check label="打开 PureGate 时自动检测当前标签" v={cfg.general.auto_check_on_open} on={(v) => up((c) => { c.general.auto_check_on_open = v; })} />
             <Check label="检测全部通过后自动启动应用" v={cfg.general.auto_launch_when_pass} on={(v) => up((c) => { c.general.auto_launch_when_pass = v; })} />
-            <Check label="退出 ClaudeGate 时同时关闭所有已启用的应用" v={cfg.general.kill_apps_on_exit} on={(v) => up((c) => { c.general.kill_apps_on_exit = v; })} />
+            <Check label="退出 PureGate 时同时关闭所有已启用的应用" v={cfg.general.kill_apps_on_exit} on={(v) => up((c) => { c.general.kill_apps_on_exit = v; })} />
             <ShortcutPanel />
             <h3>运行期守护</h3>
             <p className="sub">应用运行期间定时检测出口 IP，VPN 掉线 / 线路切换时立即结束该应用，防止直连裸奔。每个应用独立守护。</p>
@@ -227,7 +227,7 @@ function ShortcutPanel() {
   return (
     <>
       <h3>桌面快捷方式</h3>
-      <p className="sub">在桌面放一个 ClaudeGate 图标，双击即可打开。用安装包安装时，安装完成页也可以勾选「创建桌面快捷方式」。</p>
+      <p className="sub">在桌面放一个 PureGate 净启 图标，双击即可打开。用安装包安装时，安装完成页也可以勾选「创建桌面快捷方式」。</p>
       {info && (
         <div className="row">
           <span className="label">状态</span>

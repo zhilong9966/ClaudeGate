@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "ClaudeGate",
+  "productName": "PureGate",
   "version": "0.1.0",
   "identifier": "com.zhilong.claudegate",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "ClaudeGate",
+        "title": "PureGate 净启",
         "width": 1180,
         "height": 860,
         "minWidth": 900,
@@ -37,10 +37,10 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "license": "LicenseRef-ClaudeGate",
+    "license": "LicenseRef-PureGate",
     "licenseFile": "../LICENSE",
     "publisher": "zhilong9966",
-    "copyright": "Copyright (c) 2026 zhilong9966. Free for personal use; commercial use requires a license: zhilongfeng66@gmail.com",
+    "copyright": "Copyright (c) 2026 zhilong9966. PureGate 净启 - free for personal use; commercial use requires a license: zhilongfeng66@gmail.com",
     "windows": {
       "nsis": {
         "languages": [
@@ -49,6 +49,7 @@
         ],
         "displayLanguageSelector": false
       }
-    }
+    },
+    "shortDescription": "PureGate 净启 - AI 桌面应用安全启动器"
   }
 }

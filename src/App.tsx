@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "./api";
+import logo from "../app-icon.svg";
 import Home from "./pages/Home";
 import Settings from "./pages/Settings";
 import Support from "./pages/Support";
@@ -22,7 +23,7 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <div className="brand">ClaudeGate <span>AI 桌面应用安全启动器</span></div>
+        <div className="brand"><img className="logo" src={logo} alt="" />PureGate <b>净启</b><span>AI 桌面应用安全启动器</span></div>
         <nav>
           {apps.map((a) => (
             <button key={a.id} className={page === a.id ? "tab active" : "tab"} onClick={() => setPage(a.id)}>

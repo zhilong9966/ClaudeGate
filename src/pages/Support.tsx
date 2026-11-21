@@ -9,7 +9,7 @@ const REPO_URL = "https://github.com/zhilong9966/ClaudeGate";
 const SOLUTIONS = [
   { title: "专属出口线路规划", desc: "按团队所在地与使用的 AI 服务，规划稳定、纯净的出口线路与节点，减少线路切换和 IP 漂移。" },
   { title: "分流与 DNS 防泄露配置", desc: "审计现有代理客户端的分流规则、TUN 与 DNS 设置，消除 DNS / UDP 泄露和多网卡并发解析问题。" },
-  { title: "团队批量部署", desc: "为团队统一部署 ClaudeGate，集中下发检测规则与硬性条件，统一进程清理策略。" },
+  { title: "团队批量部署", desc: "为团队统一部署 PureGate，集中下发检测规则与硬性条件，统一进程清理策略。" },
   { title: "企业授权与定制", desc: "企业内部使用授权、定制检测项、私有化检测服务端部署。" },
 ];
 
@@ -40,7 +40,7 @@ export default function Support() {
             <div className="email">{CONTACT_EMAIL}</div>
           </div>
           <div className="contact-actions">
-            <button className="btn primary" onClick={() => mail("ClaudeGate 咨询")}>发送邮件</button>
+            <button className="btn primary" onClick={() => mail("PureGate 净启 咨询")}>发送邮件</button>
             <button className="btn" onClick={copy}>{copied ? "已复制" : "复制邮箱"}</button>
           </div>
         </div>
@@ -65,7 +65,7 @@ export default function Support() {
           <div className="row"><span className="label">个人使用</span><span className="value"><span className="tag ok">免费</span></span></div>
           <div className="row"><span className="label">企业 / 商业使用</span><span className="value"><span className="tag warn">需授权</span></span></div>
           <p className="sub">企业、机构或任何商业用途须先取得书面授权，详见安装目录或仓库中的 LICENSE。</p>
-          <button className="btn" onClick={() => mail("ClaudeGate 企业授权咨询")}>申请企业授权</button>
+          <button className="btn" onClick={() => mail("PureGate 净启 企业授权咨询")}>申请企业授权</button>
         </div>
         <div className="card">
           <div className="card-title">关于</div>

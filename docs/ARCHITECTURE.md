@@ -1,4 +1,6 @@
-# ClaudeGate 架构设计
+# PureGate 净启 架构设计
+
+> 原名 PureGate；内部标识 `com.zhilong.claudegate`、Rust crate 名与日志文件前缀保持不变，以兼容已有配置。
 
 > 一个跨平台（Windows / macOS）的 Claude 桌面版"安全启动器"：
 > **启动前**检测网络环境，硬性条件全部通过后才出现"启动 Claude"按钮；
@@ -8,7 +10,7 @@
 
 ## 0. 多应用（v2 配置）
 
-ClaudeGate 同时保护多个 AI 桌面应用，每个应用一个顶部标签页，检测、启动、关闭、守护、配置完全独立：
+PureGate 同时保护多个 AI 桌面应用，每个应用一个顶部标签页，检测、启动、关闭、守护、配置完全独立：
 
 | 应用 | 出口 IP 获取 | 可用性探测 | 状态页 | 启动（Windows） | 进程规则（Windows） |
 |---|---|---|---|---|---|
@@ -26,7 +28,7 @@ ClaudeGate 同时保护多个 AI 桌面应用，每个应用一个顶部标签�
 
 | 原则 | 说明 |
 |---|---|
-| **不碰账号** | 检测全部由 ClaudeGate 自己的 HTTP 客户端发起，**不携带任何 Claude Cookie / Token**，不登录、不调用 Claude API、不打开 claude.ai 页面。对 Claude 域名只请求 Cloudflare 边缘的 `/cdn-cgi/trace`（这是 Cloudflare 节点直接返回的纯文本，不进入 Anthropic 应用服务器，也与账号无关），且该项可在设置中关闭。 |
+| **不碰账号** | 检测全部由 PureGate 自己的 HTTP 客户端发起，**不携带任何 Claude Cookie / Token**，不登录、不调用 Claude API、不打开 claude.ai 页面。对 Claude 域名只请求 Cloudflare 边缘的 `/cdn-cgi/trace`（这是 Cloudflare 节点直接返回的纯文本，不进入 Anthropic 应用服务器，也与账号无关），且该项可在设置中关闭。 |
 | **检测与 Claude 同路** | `claude.ai/cdn-cgi/trace` 返回的 `ip=` 就是"Claude 看到的你的出口 IP"，与 ip.net.coffee 的做法一致，能如实反映分流规则下 Claude 走的线路。 |
 | **硬性条件可配置** | 每个检测项都有 `启用 / 硬性(必须通过) / 阈值` 三个维度，硬性项失败 → 不允许启动；非硬性项失败 → 仅警告。 |
 | **数据源可插拔** | IP 风险库默认用 ip.net.coffee，可切换到 ipapi.is / ip-api 等，避免单点失效。 |
@@ -40,8 +42,8 @@ ClaudeGate 同时保护多个 AI 桌面应用，每个应用一个顶部标签�
 **Tauri 2（Rust 后端 + React/TypeScript 前端）**
 
 - 产物小（Windows 安装包约 5–10 MB，对比 Electron 约 80 MB+）。
-- Windows：输出 `ClaudeGate.exe`（便携）+ NSIS 安装包 `ClaudeGate_x.y.z_x64-setup.exe`。
-- macOS：输出 `ClaudeGate.app` / `.dmg`（Intel + Apple Silicon 通用包）。
+- Windows：输出 `PureGate.exe`（便携）+ NSIS 安装包 `PureGate_x.y.z_x64-setup.exe`。
+- macOS：输出 `PureGate.app` / `.dmg`（Intel + Apple Silicon 通用包）。
 - 检测（HTTP / UDP STUN / DNS）、进程管理全部放在 Rust 侧，不受浏览器 CORS 限制，也不会和 Claude 共享浏览器指纹/Cookie。
 - macOS 包必须在 Mac 上编译 → 使用 **GitHub Actions** 矩阵（windows-latest + macos-latest）自动打包，Windows 也可本地 `npm run tauri build`。
 
@@ -50,7 +52,7 @@ ClaudeGate 同时保护多个 AI 桌面应用，每个应用一个顶部标签�
 ## 3. 总体结构
 
 ```
-┌──────────────────────────── ClaudeGate (Tauri) ─────────────────────────────┐
+┌──────────────────────────── PureGate (Tauri) ─────────────────────────────┐
 │  前端 UI (React + TS)                                                        │
 │   ├─ 首页：[开始检测] → 检测卡片网格（同截图样式） → [启动 Claude] [关闭 Claude] │
 │   └─ 设置：基础 / 检测项与硬性条件 / 自定义站点 / 进程管理 / 网络与高级        │
@@ -161,7 +163,7 @@ struct CheckResult {
 3. 二次扫描，仍有残留则重试，最终给出"已清理 X 个进程 / 残留列表"。
 4. 选项：
    - "保留独立运行的 Claude Code CLI"（只杀桌面版拉起的子树，不杀用户自己在终端开的 `claude`）。
-   - 关闭 ClaudeGate 时是否顺带关闭 Claude。
+   - 关闭 PureGate 时是否顺带关闭 Claude。
 
 ### 6.3 运行期守护（可选）
 Claude 运行期间每 N 秒检测 Claude 出口 IP；如 IP 变化、国家变化、或获取失败（VPN 断开），立即杀进程并弹窗提示——避免"VPN 掉线后 Claude 直连国内 IP"这种最常见的封号原因。
@@ -246,7 +248,7 @@ Claude 运行期间每 N 秒检测 Claude 出口 IP；如 IP 变化、国家变�
 ## 8. 目录结构
 
 ```
-ClaudeGate/
+PureGate/
 ├─ docs/ARCHITECTURE.md
 ├─ package.json / vite.config.ts / tsconfig.json / index.html
 ├─ src/                      # 前端
@@ -268,6 +270,6 @@ ClaudeGate/
 
 1. **第三方数据源**：信任分/DNS 泄露依赖 ip.net.coffee 的公开接口，接口变动会导致该项"无数据"。规则里"无数据"默认按 Warn 处理，可设为 Fail。
 2. **请求 claude.ai 的唯一内容是 `/cdn-cgi/trace`**：无 Cookie、无登录态、与账号无关。如仍顾虑，可在设置中改用"仅 CF 出口"模式（前提是确认分流规则让 1.1.1.1 与 claude.ai 走同一线路）。
-3. **检测线路 = Claude 线路？** ClaudeGate 与 Claude 都走系统代理/TUN 时才一致。若用的是"按进程分流"，需要把 ClaudeGate 也加入同一规则，或在设置中填写与 Claude 相同的代理地址。
+3. **检测线路 = Claude 线路？** PureGate 与 Claude 都走系统代理/TUN 时才一致。若用的是"按进程分流"，需要把 PureGate 也加入同一规则，或在设置中填写与 Claude 相同的代理地址。
 4. **杀进程误伤**：默认规则用"名称 + 路径"双重匹配，不会误杀其他 Electron 应用；"保留独立 CLI"默认开启。
 5. **macOS 权限**：杀进程/启动应用无需额外权限；未签名包首次打开需在"隐私与安全性"中允许，正式发布建议 Apple Developer ID 签名 + 公证。
