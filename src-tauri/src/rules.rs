@@ -157,6 +157,11 @@ pub fn evaluate(app: &AppProfile, f: Facts) -> Report {
         Some((true, format!("UDP 出口 {}", u.ip)))
     });
 
+    c.check("ipv6_leak", "IPv6 泄露", |r| {
+        let v6 = f.ipv6.as_ref()?;
+        Some(crate::detect::ipv6::judge(v6, &r.list("blocked_countries"), r.bool("fail_on_any_ipv6", false)))
+    });
+
     c.check("ip_consistent", "出口一致性", |r| {
         let ip = egress_ip.clone()?;
         let cf = f.cf.as_ref()?;

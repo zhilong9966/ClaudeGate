@@ -1,6 +1,6 @@
 [package]
 name = "claudegate"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 license-file = "../LICENSE"
 description = "Safe launcher for Claude Desktop: network checks before launch, full cleanup on close"
@@ -32,6 +32,7 @@ log = "0.4"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 tauri-plugin-notification = "2"
 tauri-plugin-single-instance = "2"
+if-addrs = "0.13"
 
 [profile.release]
 opt-level = "s"

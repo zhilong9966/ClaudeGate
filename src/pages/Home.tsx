@@ -144,6 +144,11 @@ export default function Home({ appId, appName, active }: { appId: string; appNam
               <Row label="状态"><StatusTag c={byId("udp_leak")} /></Row>
               <Row label="UDP 出口">{f.udp?.ip ?? "—"}</Row>
               <Row label="归属地">{f.udp?.country_code ?? "—"}</Row></div>
+            <div className="card"><div className="card-title">IPv6 泄露检测</div>
+              <Row label="状态"><StatusTag c={byId("ipv6_leak")} /></Row>
+              <Row label="IPv6 出口">{f.ipv6 ? (f.ipv6.egress ? `${f.ipv6.egress} (${f.ipv6.egress_country || "?"})` : "出站不通") : "—"}</Row>
+              <Row label="本机公网 IPv6">{f.ipv6 ? (f.ipv6.local_addrs.length ? `${f.ipv6.local_addrs.length} 个` : "无") : "—"}</Row>
+              <Row label={`${f.ipv6?.app_domain || appName} AAAA`}>{f.ipv6 ? (f.ipv6.app_aaaa.length ? f.ipv6.app_aaaa[0] : "无") : "—"}</Row></div>
           </div>
 
           <div className="card wide"><div className="card-title">本机环境</div>

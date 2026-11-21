@@ -434,6 +434,8 @@ pub fn default_checks(blocked: &[&str]) -> BTreeMap<String, CheckRule> {
     m.insert("avail".into(), rule(true, true, json!({})));
     m.insert("service_status".into(), rule(true, false, json!({ "fail_on": ["major", "critical"] })));
     m.insert("dns_leak".into(), rule(true, true, json!({ "blocked_countries": ["CN"], "method": "both" })));
+    // IPv6 泄露：本机 IPv6 出站直连且落在禁止地区（真实位置暴露）→ 硬失败
+    m.insert("ipv6_leak".into(), rule(true, true, json!({ "blocked_countries": blocked, "fail_on_any_ipv6": false })));
     m.insert("udp_leak".into(), rule(true, false, json!({ "must_equal_claude_ip": true })));
     m.insert("ip_consistent".into(), rule(true, false, json!({ "cf_equals_claude": false })));
     m.insert("timezone".into(), rule(true, false, json!({ "mode": "same_country" })));

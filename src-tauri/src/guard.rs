@@ -119,6 +119,8 @@ async fn tick(handle: &AppHandle) {
         return;
     }
     let Ok(client) = crate::http::client(&cfg.network) else { return };
+    // IPv6 出口每轮只探测一次，所有应用共用
+    let mut v6_cache: Option<crate::detect::ipv6::Ipv6Facts> = None;
 
     for profile in cfg.apps.iter().filter(|a| a.enabled) {
         let id = profile.id.clone();
@@ -158,6 +160,17 @@ async fn tick(handle: &AppHandle) {
             Err(e) => Err(e.to_string()),
         };
         let mut reason = decide_quick(&mut ag, &g, profile, obs);
+
+        // IPv6 泄露快速复检（VPN 掉线后 IPv6 直连是最隐蔽的泄露）
+        if let (None, Some(rule)) = (&reason, profile.rule("ipv6_leak")) {
+            if v6_cache.is_none() {
+                v6_cache = Some(crate::detect::ipv6::detect(&client, &cfg, profile).await);
+            }
+            let (ok, msg) = crate::detect::ipv6::judge(v6_cache.as_ref().unwrap(), &rule.list("blocked_countries"), rule.bool("fail_on_any_ipv6", false));
+            if !ok && rule.required {
+                reason = Some(msg);
+            }
+        }
 
         // 完整复检：外部启动的应用首次必做；之后按间隔
         let due = match ag.last_full {

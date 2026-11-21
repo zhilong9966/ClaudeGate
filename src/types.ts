@@ -19,6 +19,10 @@ export interface Facts {
   status?: { indicator: string; description: string };
   dns?: { servers: { ip: string; country_code: string }[] };
   udp?: { ip: string; server: string; country_code: string };
+  ipv6?: {
+    local_addrs: string[]; egress: string; egress_country: string; egress_error: string;
+    app_domain: string; app_aaaa: string[]; app_egress: string;
+  };
   device: { timezone: string; locales: string[]; os: string; arch: string };
   custom: {
     name: string; domain: string; egress_ip: string; egress_country: string; egress_error: string;
@@ -84,7 +88,7 @@ export const CHECK_TITLES: Record<string, string> = {
   egress_ip: "出口 IP 获取", region: "支持地区", trust_score: "信任评分",
   ip_type: "IP 属性（住宅/机房）", vpn: "VPN", proxy: "代理 (Proxy)", tor: "Tor",
   crawler: "机器人 (Crawler)", abuser: "滥用记录", avail: "可用性（见「出口与探测」）",
-  service_status: "服务状态", dns_leak: "DNS 泄露", udp_leak: "WebRTC/UDP 泄露",
+  service_status: "服务状态", dns_leak: "DNS 泄露", ipv6_leak: "IPv6 泄露", udp_leak: "WebRTC/UDP 泄露",
   ip_consistent: "出口一致性", timezone: "时区一致", language: "系统语言",
 };
 
@@ -93,7 +97,7 @@ export const PARAM_TITLES: Record<string, string> = {
   fail_when_no_data: "无数据时判失败", require_residential: "必须住宅 IP",
   fail_on: "以下状态判失败", must_equal_claude_ip: "UDP 出口须等于应用出口",
   cf_equals_claude: "CF 出口须等于应用出口", mode: "模式 (same_country / exact)",
-  forbid_primary: "禁止的首选语言", method: "解析方式 (both / system / http)",
+  forbid_primary: "禁止的首选语言", fail_on_any_ipv6: "存在任何 IPv6 出口都判失败", method: "解析方式 (both / system / http)",
 };
 
 export const EGRESS_MODES: Record<string, string> = {

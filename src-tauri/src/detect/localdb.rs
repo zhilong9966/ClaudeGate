@@ -176,24 +176,25 @@ fn in_list(d: &Path, file: &str, ip: Ipv4Addr) -> Option<bool> {
     Some(parse_ranges(&text).iter().any(|(s, e)| *s <= v && v <= *e))
 }
 
-fn country_lookup(d: &Path, ip: Ipv4Addr) -> Option<(String, String)> {
+fn country_lookup(d: &Path, ip: std::net::IpAddr) -> Option<(String, String)> {
     let r = maxminddb::Reader::open_readfile(d.join("country.mmdb")).ok()?;
-    let c: maxminddb::geoip2::Country = r.lookup(ip.into()).ok()?;
+    let c: maxminddb::geoip2::Country = r.lookup(ip).ok()?;
     let country = c.country?;
     let code = country.iso_code.unwrap_or("").to_uppercase();
     let name = country.names.and_then(|n| n.get("en").map(|s| s.to_string())).unwrap_or_default();
     Some((code, name))
 }
 
-fn asn_lookup(d: &Path, ip: Ipv4Addr) -> Option<(u64, String)> {
+fn asn_lookup(d: &Path, ip: std::net::IpAddr) -> Option<(u64, String)> {
     let r = maxminddb::Reader::open_readfile(d.join("asn.mmdb")).ok()?;
-    let a: maxminddb::geoip2::Asn = r.lookup(ip.into()).ok()?;
+    let a: maxminddb::geoip2::Asn = r.lookup(ip).ok()?;
     Some((a.autonomous_system_number? as u64, a.autonomous_system_organization.unwrap_or("").to_string()))
 }
 
 /// 仅国家码，供 DNS 解析器 / UDP 出口 / 自定义站点归属判断使用
+/// IPv4 / IPv6 均可（DB-IP Lite 同时覆盖两者）
 pub fn country(cfg: &AppConfig, ip: &str) -> Option<String> {
-    let ip: Ipv4Addr = ip.parse().ok()?;
+    let ip: std::net::IpAddr = ip.parse().ok()?;
     country_lookup(&dir(&cfg.network.local_db), ip).map(|(c, _)| c).filter(|c| !c.is_empty())
 }
 
@@ -213,8 +214,8 @@ pub fn lookup(cfg: &AppConfig, ip: &str) -> anyhow::Result<Risk> {
     let d = dir(&cfg.network.local_db);
     let addr: Ipv4Addr = ip.parse().map_err(|_| anyhow::anyhow!("暂只支持 IPv4: {ip}"))?;
     let (country_code, country) =
-        country_lookup(&d, addr).ok_or_else(|| anyhow::anyhow!("国家库缺失或查询失败（目录 {}）", d.display()))?;
-    let asn = asn_lookup(&d, addr);
+        country_lookup(&d, addr.into()).ok_or_else(|| anyhow::anyhow!("国家库缺失或查询失败（目录 {}）", d.display()))?;
+    let asn = asn_lookup(&d, addr.into());
     // 机房判定：IP 段列表命中，或 ASN 组织名含云 / 机房关键词
     let org = asn.as_ref().map(|a| a.1.to_ascii_lowercase()).unwrap_or_default();
     let asn_hosting = !org.is_empty()

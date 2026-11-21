@@ -6,6 +6,7 @@ pub mod device;
 pub mod dns_leak;
 pub mod egress;
 pub mod iprisk;
+pub mod ipv6;
 pub mod localdb;
 pub mod status;
 pub mod stun;
@@ -28,6 +29,7 @@ pub struct Facts {
     pub status: Option<status::Status>,
     pub dns: Option<dns_leak::DnsLeak>,
     pub udp: Option<stun::Udp>,
+    pub ipv6: Option<ipv6::Ipv6Facts>,
     pub device: device::Device,
     pub custom: Vec<custom::SiteFacts>,
 }
@@ -44,7 +46,7 @@ pub async fn collect(cfg: &AppConfig, app: &AppProfile) -> Facts {
     log::info!("[{}] 开始检测（IP 数据源: {}）", app.id, if local { "本地离线库" } else { cfg.network.risk_provider.as_str() });
 
     // 第一轮：互不依赖的检测并发执行
-    let (_, cn, cf, avail, st, dns, udp) = tokio::join!(
+    let (_, cn, cf, avail, st, dns, v6, udp) = tokio::join!(
         // 本地离线库缺失或过期时先下载（只下载数据文件，不发送任何 IP）
         async { if local { localdb::update(&client, &cfg.network.local_db, false).await } else { vec![] } },
         cn_ip::fetch(&client, &ep.cn_ip),
@@ -58,6 +60,7 @@ pub async fn collect(cfg: &AppConfig, app: &AppProfile) -> Facts {
         },
         async { if on("service_status") && !app.status_url.is_empty() { status::fetch(&client, &app.status_url).await.ok() } else { None } },
         async { if on("dns_leak") { dns_leak::detect(&client, cfg, app).await.map_err(|e| log::warn!("[{}] DNS 泄露检测失败: {e}", app.id)).ok() } else { None } },
+        async { if on("ipv6_leak") { Some(ipv6::detect(&client, cfg, app).await) } else { None } },
         async { if on("udp_leak") { stun::detect(&ep.stun, cfg.network.timeout_ms).await.map_err(|e| log::warn!("[{}] UDP 出口检测失败: {e}", app.id)).ok() } else { None } },
     );
     let cf = cf.ok();
@@ -104,6 +107,7 @@ pub async fn collect(cfg: &AppConfig, app: &AppProfile) -> Facts {
         status: st,
         dns,
         udp,
+        ipv6: v6,
         custom,
         ..base
     }
