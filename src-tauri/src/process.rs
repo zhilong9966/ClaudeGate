@@ -1,4 +1,4 @@
-//! 查找并彻底结束 Claude 进程（含子进程树），多轮扫描确认无残留。
+//! 查找并彻底结束受保护应用的进程（含子进程树），多轮扫描确认无残留。
 use crate::config::{ProcessCfg, ProcessRule};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
@@ -57,20 +57,16 @@ fn targets(sys: &System, cfg: &ProcessCfg) -> Vec<Pid> {
         }
     }
 
-    // 判断一个进程是否由 Claude 桌面版拉起（用于"保留独立 CLI"）
-    let is_desktop = |pid: Pid| -> bool {
-        sys.process(pid)
-            .and_then(|p| p.exe())
-            .map(|e| {
-                let e = e.to_string_lossy().to_ascii_lowercase();
-                e.contains("windowsapps\\claude_") || e.contains("anthropicclaude") || e.contains("/applications/claude.app/")
-            })
-            .unwrap_or(false)
+    let has = |path: &str, markers: &[String]| {
+        let p = path.to_ascii_lowercase();
+        markers.iter().any(|m| !m.is_empty() && p.contains(&m.to_ascii_lowercase()))
     };
+    let exe_of = |pid: Pid| sys.process(pid).and_then(|p| p.exe()).map(|e| e.to_string_lossy().into_owned()).unwrap_or_default();
+    // 祖先进程里是否有桌面版主程序（用于"保留独立 CLI"）
     let launched_by_desktop = |mut pid: Pid| -> bool {
         for _ in 0..16 {
             match sys.process(pid).and_then(|p| p.parent()) {
-                Some(pp) if is_desktop(pp) => return true,
+                Some(pp) if has(&exe_of(pp), &cfg.desktop_markers) => return true,
                 Some(pp) => pid = pp,
                 None => return false,
             }
@@ -84,8 +80,7 @@ fn targets(sys: &System, cfg: &ProcessCfg) -> Vec<Pid> {
         if !rs.iter().any(|r| matches(r, &name, &path)) {
             continue;
         }
-        let cli = path.to_ascii_lowercase().contains("claude-code");
-        if cfg.keep_standalone_cli && cli && !launched_by_desktop(*pid) {
+        if cfg.keep_standalone_cli && has(&path, &cfg.cli_markers) && !launched_by_desktop(*pid) {
             continue;
         }
         set.insert(*pid);

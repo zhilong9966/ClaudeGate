@@ -1,6 +1,6 @@
 //! DNS 泄露检测：访问随机子域名触发解析，再向权威 DNS 记录方查询"是哪些解析器来问的"。
 //! 解析器在国内 → 说明 DNS 走了直连（泄露）。
-use crate::config::AppConfig;
+use crate::config::{AppConfig, AppProfile};
 use serde::Serialize;
 use serde_json::Value;
 use std::time::Duration;
@@ -16,7 +16,7 @@ pub struct DnsLeak {
     pub servers: Vec<DnsServer>,
 }
 
-pub async fn detect(client: &reqwest::Client, cfg: &AppConfig) -> anyhow::Result<DnsLeak> {
+pub async fn detect(client: &reqwest::Client, cfg: &AppConfig, app: &AppProfile) -> anyhow::Result<DnsLeak> {
     let ep = &cfg.network.endpoints;
     let token: String = {
         use rand::Rng;
@@ -26,7 +26,7 @@ pub async fn detect(client: &reqwest::Client, cfg: &AppConfig) -> anyhow::Result
     // system = 走操作系统 DNS 客户端（与 Claude 桌面版/Chromium 一致，能发现 Windows 多网卡并发查询导致的泄露）
     // http   = 只发 HTTPS 请求（与网页检测站一致）
     // both   = 两者都做（默认，最严格）
-    let method = cfg.checks.get("dns_leak").map(|r| r.str("method", "both")).unwrap_or_else(|| "both".into());
+    let method = app.checks.get("dns_leak").map(|r| r.str("method", "both")).unwrap_or_else(|| "both".into());
     for i in 1..=2 {
         let host = format!("{token}-{i}.{}", ep.dns_leak_base);
         if method != "http" {

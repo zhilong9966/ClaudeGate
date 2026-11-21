@@ -1,7 +1,6 @@
 //! 用户自定义站点：出口 IP（经该站点看到的本机 IP）+ 入口 IP（该域名被解析到哪里）。
-use crate::config::{AppConfig, CustomSite};
+use crate::config::{AppConfig, AppProfile, CustomSite};
 use serde::Serialize;
-use serde_json::Value;
 
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct SiteFacts {
@@ -15,8 +14,8 @@ pub struct SiteFacts {
     pub ingress_error: String,
 }
 
-pub async fn collect(client: &reqwest::Client, cfg: &AppConfig) -> Vec<SiteFacts> {
-    futures::future::join_all(cfg.custom_sites.iter().map(|s| one(client, cfg, s))).await
+pub async fn collect(client: &reqwest::Client, cfg: &AppConfig, app: &AppProfile) -> Vec<SiteFacts> {
+    futures::future::join_all(app.custom_sites.iter().map(|s| one(client, cfg, s))).await
 }
 
 async fn one(client: &reqwest::Client, cfg: &AppConfig, s: &CustomSite) -> SiteFacts {
@@ -24,7 +23,7 @@ async fn one(client: &reqwest::Client, cfg: &AppConfig, s: &CustomSite) -> SiteF
 
     let egress: anyhow::Result<String> = match s.egress_mode.as_str() {
         "cf_trace" => crate::detect::trace::fetch(client, &format!("https://{}/cdn-cgi/trace", s.domain)).await.map(|t| t.ip),
-        "ip_echo" => echo(client, &s.egress_url, &s.egress_json_field).await,
+        "ip_echo" => crate::detect::egress::echo(client, &s.egress_url, &s.egress_json_field).await,
         _ => Ok(String::new()),
     };
     match egress {
@@ -49,16 +48,4 @@ async fn one(client: &reqwest::Client, cfg: &AppConfig, s: &CustomSite) -> SiteF
         }
     }
     f
-}
-
-async fn echo(client: &reqwest::Client, url: &str, field: &str) -> anyhow::Result<String> {
-    let text = client.get(url).send().await?.error_for_status()?.text().await?;
-    if !field.is_empty() {
-        if let Ok(v) = serde_json::from_str::<Value>(&text) {
-            if let Some(ip) = v.get(field).and_then(|x| x.as_str()) {
-                return Ok(ip.to_string());
-            }
-        }
-    }
-    crate::http::first_ipv4(&text).ok_or_else(|| anyhow::anyhow!("返回内容中没有 IP"))
 }

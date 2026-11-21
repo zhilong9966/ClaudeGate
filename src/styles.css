@@ -60,3 +60,11 @@ td.params { display: flex; flex-wrap: wrap; gap: 8px 16px; }
 .param input:not([type="checkbox"]) { width: 200px; }
 .site { border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px 12px; margin: 10px 0; }
 .site-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 0 16px; }
+.tab { display: inline-flex; align-items: center; gap: 6px; }
+.tab-icon { font-size: 15px; }
+.side-group { font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: .06em; margin: 14px 0 4px 14px; }
+.app-select { margin: 0 0 6px 8px; }
+.panel-app { margin-top: 14px; font-size: 13px; color: var(--muted); }
+.empty { padding: 40px 0; text-align: center; color: var(--muted); font-size: 14px; }
+.btn.launch-codex { background: #10a37f; border-color: #10a37f; }
+.btn.launch-antigravity { background: #4285f4; border-color: #4285f4; }

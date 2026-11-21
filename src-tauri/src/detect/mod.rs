@@ -4,24 +4,26 @@ pub mod cn_ip;
 pub mod custom;
 pub mod device;
 pub mod dns_leak;
+pub mod egress;
 pub mod iprisk;
 pub mod status;
 pub mod stun;
 pub mod trace;
 
-use crate::config::AppConfig;
+use crate::config::{AppConfig, AppProfile};
 use serde::Serialize;
 
-/// 所有检测的原始数据，前端直接用来渲染卡片
+/// 一个应用的全部检测原始数据，前端直接用来渲染卡片
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct Facts {
+    pub app_id: String,
+    pub app_name: String,
     pub cn_ip: Option<cn_ip::CnIp>,
     pub cf: Option<trace::Trace>,
-    pub claude: Option<trace::Trace>,
-    pub claude_error: Option<String>,
+    pub egress: Option<egress::Egress>,
+    pub egress_error: Option<String>,
     pub risk: Option<iprisk::Risk>,
-    pub avail_claude: Option<availability::Avail>,
-    pub avail_anthropic: Option<availability::Avail>,
+    pub avail: Vec<availability::Avail>,
     pub status: Option<status::Status>,
     pub dns: Option<dns_leak::DnsLeak>,
     pub udp: Option<stun::Udp>,
@@ -29,39 +31,50 @@ pub struct Facts {
     pub custom: Vec<custom::SiteFacts>,
 }
 
-pub async fn collect(cfg: &AppConfig) -> Facts {
+pub async fn collect(cfg: &AppConfig, app: &AppProfile) -> Facts {
+    let base = Facts { app_id: app.id.clone(), app_name: app.name.clone(), device: device::collect(), ..Default::default() };
     let client = match crate::http::client(&cfg.network) {
         Ok(c) => c,
-        Err(e) => {
-            return Facts { claude_error: Some(format!("HTTP 客户端创建失败: {e}")), device: device::collect(), ..Default::default() }
-        }
+        Err(e) => return Facts { egress_error: Some(format!("HTTP 客户端创建失败: {e}")), ..base },
     };
     let ep = &cfg.network.endpoints;
-    let on = |id: &str| cfg.rule(id).is_some();
+    let on = |id: &str| app.rule(id).is_some();
 
     // 第一轮：互不依赖的检测并发执行
-    let (cn, cf, claude, a_claude, a_anth, st, dns, udp) = tokio::join!(
+    let (cn, cf, avail, st, dns, udp) = tokio::join!(
         cn_ip::fetch(&client, &ep.cn_ip),
         trace::fetch(&client, &ep.cf_trace),
-        trace::fetch(&client, &ep.claude_trace),
-        async { if on("avail_claude") { Some(availability::probe(&client, "claude.ai", &ep.claude_trace).await) } else { None } },
-        async { if on("avail_anthropic") { Some(availability::probe(&client, "anthropic.com", &ep.anthropic_trace).await) } else { None } },
-        async { if on("service_status") { status::fetch(&client, &ep.status).await.ok() } else { None } },
-        async { if on("dns_leak") { dns_leak::detect(&client, cfg).await.ok() } else { None } },
+        async {
+            if on("avail") {
+                futures::future::join_all(app.probes.iter().map(|p| availability::probe(&client, &p.name, &p.url))).await
+            } else {
+                vec![]
+            }
+        },
+        async { if on("service_status") && !app.status_url.is_empty() { status::fetch(&client, &app.status_url).await.ok() } else { None } },
+        async { if on("dns_leak") { dns_leak::detect(&client, cfg, app).await.ok() } else { None } },
         async { if on("udp_leak") { stun::detect(&ep.stun, cfg.network.timeout_ms).await.ok() } else { None } },
     );
+    let cf = cf.ok();
 
-    let (claude, claude_error) = match claude {
-        Ok(t) => (Some(t), None),
+    // 第二轮：应用出口 IP（google_ecs 模式依赖 CF 出口）
+    let (egress, egress_error) = match egress::fetch(&client, &app.egress, cf.as_ref()).await {
+        Ok(e) => (Some(e), None),
         Err(e) => (None, Some(e.to_string())),
     };
 
-    // 第二轮：依赖 Claude 出口 IP 的检测
-    let risk = match &claude {
-        Some(t) => iprisk::fetch(&client, cfg, &t.ip).await.ok(),
+    // 第三轮：依赖出口 IP 的检测
+    let risk = match &egress {
+        Some(e) => iprisk::fetch(&client, cfg, &e.ip).await.ok(),
         None => None,
     };
-    let custom = custom::collect(&client, cfg).await;
+    let mut egress = egress;
+    if let (Some(e), Some(r)) = (egress.as_mut(), risk.as_ref()) {
+        if e.loc.is_empty() {
+            e.loc = r.country_code.clone();
+        }
+    }
+    let custom = custom::collect(&client, cfg, app).await;
     let mut udp = udp;
     if let Some(u) = udp.as_mut() {
         u.country_code = iprisk::country_of(&client, cfg, &u.ip).await.unwrap_or_default();
@@ -69,16 +82,15 @@ pub async fn collect(cfg: &AppConfig) -> Facts {
 
     Facts {
         cn_ip: cn.ok(),
-        cf: cf.ok(),
-        claude,
-        claude_error,
+        cf,
+        egress,
+        egress_error,
         risk,
-        avail_claude: a_claude,
-        avail_anthropic: a_anth,
+        avail,
         status: st,
         dns,
         udp,
-        device: device::collect(),
         custom,
+        ..base
     }
 }

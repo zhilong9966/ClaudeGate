@@ -15,7 +15,7 @@ pub async fn probe(client: &reqwest::Client, name: &str, url: &str) -> Avail {
     let res = client.get(url).send().await;
     let latency_ms = t.elapsed().as_millis() as u64;
     match res {
-        Ok(r) if r.status().is_success() => Avail { name: name.into(), ok: true, latency_ms, error: String::new() },
+        Ok(r) if r.status().as_u16() < 500 => Avail { name: name.into(), ok: true, latency_ms, error: String::new() },
         Ok(r) => Avail { name: name.into(), ok: false, latency_ms, error: format!("HTTP {}", r.status()) },
         Err(e) => Avail { name: name.into(), ok: false, latency_ms, error: e.to_string() },
     }

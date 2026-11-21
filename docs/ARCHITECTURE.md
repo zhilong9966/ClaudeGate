@@ -6,6 +6,22 @@
 
 ---
 
+## 0. 多应用（v2 配置）
+
+ClaudeGate 同时保护多个 AI 桌面应用，每个应用一个顶部标签页，检测、启动、关闭、守护、配置完全独立：
+
+| 应用 | 出口 IP 获取 | 可用性探测 | 状态页 | 启动（Windows） | 进程规则（Windows） |
+|---|---|---|---|---|---|
+| Claude | `claude.ai/cdn-cgi/trace` | claude.ai★、anthropic.com | status.claude.com | AUMID `Claude_pzs8sxrjxfjjc!Claude` | `WindowsApps\Claude_`、`Claude-Data`/`claude-code` |
+| Codex | `chatgpt.com/cdn-cgi/trace` | chatgpt.com★、api.openai.com、auth.openai.com | status.openai.com | AUMID `OpenAI.Codex_2p2nqsd0c76g0!App` | `WindowsApps\OpenAI.Codex_`、`OpenAI.CodexPrimaryRuntime` |
+| Antigravity | `google_ecs`：dns.google 返回 Google 看到的客户端网段，再与 CF 出口 IP 比对 | antigravity.google★、cloudcode-pa.googleapis.com | 无（跳过） | AUMID `Google.Antigravity` | `Programs\antigravity\`、`Programs\Antigravity IDE\` |
+
+- Google 系没有 `/cdn-cgi/trace`，因此 Antigravity 用 `https://dns.google/resolve?name=o-o.myaddr.l.google.com&type=TXT`：
+  返回的 `edns0-client-subnet` 是 **Google 侧看到的你的 /24 网段**，与 CF 出口 IP 不在同一网段即判定"分流规则不同"→ 硬失败。
+- 配置结构：`{ version: 2, general, network, apps: [AppProfile…] }`，`AppProfile` 含 `egress / probes / status_url / launcher / checks / custom_sites / process`。
+  v1 配置会被自动替换为默认值。
+- 下文中的"Claude"在多应用下泛指当前标签对应的应用。
+
 ## 1. 设计原则
 
 | 原则 | 说明 |

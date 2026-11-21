@@ -1,19 +1,45 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { api } from "./api";
 import Home from "./pages/Home";
 import Settings from "./pages/Settings";
+import type { AppProfile } from "./types";
+
+const ICON: Record<string, string> = { claude: "✳", codex: "◎", antigravity: "▲" };
 
 export default function App() {
-  const [page, setPage] = useState<"home" | "settings">("home");
+  const [apps, setApps] = useState<AppProfile[]>([]);
+  const [page, setPage] = useState<string>("");
+
+  const reload = () =>
+    api.getConfig().then((c) => {
+      const list = c.apps.filter((a) => a.enabled);
+      setApps(list);
+      setPage((p) => p || list[0]?.id || "settings");
+    });
+  useEffect(() => { reload(); }, []);
+
   return (
     <div className="app">
       <header className="topbar">
-        <div className="brand">ClaudeGate <span>Claude 安全启动器</span></div>
+        <div className="brand">ClaudeGate <span>AI 桌面应用安全启动器</span></div>
         <nav>
-          <button className={page === "home" ? "tab active" : "tab"} onClick={() => setPage("home")}>检测与启动</button>
+          {apps.map((a) => (
+            <button key={a.id} className={page === a.id ? "tab active" : "tab"} onClick={() => setPage(a.id)}>
+              <span className="tab-icon">{ICON[a.id] ?? "●"}</span>{a.name}
+            </button>
+          ))}
           <button className={page === "settings" ? "tab active" : "tab"} onClick={() => setPage("settings")}>系统配置</button>
         </nav>
       </header>
-      <main>{page === "home" ? <Home /> : <Settings />}</main>
+      <main>
+        {/* 每个应用标签常驻，切换时保留各自的检测结果 */}
+        {apps.map((a) => (
+          <div key={a.id} hidden={page !== a.id}>
+            <Home appId={a.id} appName={a.name} active={page === a.id} />
+          </div>
+        ))}
+        {page === "settings" && <Settings onSaved={reload} />}
+      </main>
     </div>
   );
 }

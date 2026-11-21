@@ -8,7 +8,7 @@ mod process;
 mod rules;
 mod state;
 
-use std::sync::atomic::AtomicU64;
+use std::collections::HashMap;
 use std::sync::Mutex;
 use tauri::Manager;
 
@@ -23,8 +23,8 @@ pub fn run() {
             app.manage(state::AppState {
                 config_path,
                 cfg: Mutex::new(cfg),
-                last_report: Mutex::new(None),
-                guard_gen: AtomicU64::new(0),
+                reports: Mutex::new(HashMap::new()),
+                guard_gen: Mutex::new(HashMap::new()),
             });
             Ok(())
         })
@@ -34,18 +34,19 @@ pub fn run() {
             commands::default_config,
             commands::config_path,
             commands::run_checks,
-            commands::launch_claude,
-            commands::kill_claude,
-            commands::list_claude_processes,
+            commands::launch_app,
+            commands::kill_app,
+            commands::list_app_processes,
         ])
         .build(tauri::generate_context!())
         .expect("error while building ClaudeGate")
         .run(|app, event| {
             if let tauri::RunEvent::ExitRequested { .. } = event {
-                let st = app.state::<state::AppState>();
-                let cfg = st.config();
-                if cfg.general.kill_claude_on_exit {
-                    tauri::async_runtime::block_on(process::kill_all(&cfg.process));
+                let cfg = app.state::<state::AppState>().config();
+                if cfg.general.kill_apps_on_exit {
+                    for a in cfg.apps.iter().filter(|a| a.enabled) {
+                        tauri::async_runtime::block_on(process::kill_all(&a.process));
+                    }
                 }
             }
         });
@@ -53,17 +54,21 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    /// 真实网络检测（只读，不启动/不结束任何进程）：cargo test -- --ignored --nocapture
+    /// 真实网络检测（只读，不启动/不结束任何进程）：cargo test --lib -- --ignored --nocapture
     #[tokio::test]
     #[ignore]
     async fn live_checks() {
         let cfg = crate::config::AppConfig::default();
-        let facts = crate::detect::collect(&cfg).await;
-        let report = crate::rules::evaluate(&cfg, facts);
-        for c in &report.checks {
-            println!("{:?}\t{}{}\t{}", c.status, if c.required { "★" } else { " " }, c.title, c.message);
+        for app in &cfg.apps {
+            let facts = crate::detect::collect(&cfg, app).await;
+            let report = crate::rules::evaluate(app, facts);
+            println!("===== {} =====", app.name);
+            for c in &report.checks {
+                println!("{:?}\t{}{}\t{}", c.status, if c.required { "★" } else { " " }, c.title, c.message);
+            }
+            println!("can_launch = {}", report.can_launch);
+            let procs: Vec<String> = crate::process::list(&app.process).into_iter().map(|p| p.name).collect();
+            println!("matched processes (list only): {procs:?}");
         }
-        println!("can_launch = {}", report.can_launch);
-        println!("matched processes (list only): {}", crate::process::list(&cfg.process).len());
     }
 }

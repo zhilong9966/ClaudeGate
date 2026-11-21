@@ -6,8 +6,8 @@ export const api = {
   saveConfig: (cfg: AppConfig) => invoke<void>("save_config", { cfg }),
   defaultConfig: () => invoke<AppConfig>("default_config"),
   configPath: () => invoke<string>("config_path"),
-  runChecks: () => invoke<Report>("run_checks"),
-  launch: () => invoke<string>("launch_claude"),
-  kill: () => invoke<KillReport>("kill_claude"),
-  listProcesses: () => invoke<ProcInfo[]>("list_claude_processes"),
+  runChecks: (appId: string) => invoke<Report>("run_checks", { appId }),
+  launch: (appId: string) => invoke<string>("launch_app", { appId }),
+  kill: (appId: string) => invoke<KillReport>("kill_app", { appId }),
+  listProcesses: (appId: string) => invoke<ProcInfo[]>("list_app_processes", { appId }),
 };
