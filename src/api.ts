@@ -12,4 +12,6 @@ export const api = {
   listProcesses: (appId: string) => invoke<ProcInfo[]>("list_app_processes", { appId }),
   geoDbStatus: () => invoke<DbStatus>("geo_db_status"),
   updateGeoDb: (force: boolean) => invoke<string[]>("update_geo_db", { force }),
+  shortcutInfo: () => invoke<{ path: string; exists: boolean; target: string }>("shortcut_info"),
+  createShortcut: () => invoke<{ path: string; exists: boolean; target: string }>("create_shortcut"),
 };

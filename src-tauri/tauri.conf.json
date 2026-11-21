@@ -40,6 +40,15 @@
     "license": "LicenseRef-ClaudeGate",
     "licenseFile": "../LICENSE",
     "publisher": "zhilong9966",
-    "copyright": "Copyright (c) 2026 zhilong9966. Free for personal use; commercial use requires a license: zhilongfeng66@gmail.com"
+    "copyright": "Copyright (c) 2026 zhilong9966. Free for personal use; commercial use requires a license: zhilongfeng66@gmail.com",
+    "windows": {
+      "nsis": {
+        "languages": [
+          "SimpChinese",
+          "English"
+        ],
+        "displayLanguageSelector": false
+      }
+    }
   }
 }

@@ -79,6 +79,7 @@ export default function Settings({ onSaved }: { onSaved: () => void }) {
             <Check label="打开 ClaudeGate 时自动检测当前标签" v={cfg.general.auto_check_on_open} on={(v) => up((c) => { c.general.auto_check_on_open = v; })} />
             <Check label="检测全部通过后自动启动应用" v={cfg.general.auto_launch_when_pass} on={(v) => up((c) => { c.general.auto_launch_when_pass = v; })} />
             <Check label="退出 ClaudeGate 时同时关闭所有已启用的应用" v={cfg.general.kill_apps_on_exit} on={(v) => up((c) => { c.general.kill_apps_on_exit = v; })} />
+            <ShortcutPanel />
             <h3>运行期守护</h3>
             <p className="sub">应用运行期间定时检测出口 IP，VPN 掉线 / 线路切换时立即结束该应用，防止直连裸奔。每个应用独立守护。</p>
             <Check label="启用守护" v={cfg.general.guard.enabled} on={(v) => up((c) => { c.general.guard.enabled = v; })} />
@@ -209,6 +210,36 @@ export default function Settings({ onSaved }: { onSaved: () => void }) {
         {section === "process" && <ProcessTab key={app.id} app={app} upApp={upApp} />}
       </section>
     </div>
+  );
+}
+
+function ShortcutPanel() {
+  const [info, setInfo] = useState<{ path: string; exists: boolean; target: string } | null>(null);
+  const [msg, setMsg] = useState("");
+  useEffect(() => { api.shortcutInfo().then(setInfo).catch(() => {}); }, []);
+  async function create() {
+    try {
+      const r = await api.createShortcut();
+      setInfo(r);
+      setMsg("已创建：" + r.path);
+    } catch (e) { setMsg("创建失败：" + e); }
+  }
+  return (
+    <>
+      <h3>桌面快捷方式</h3>
+      <p className="sub">在桌面放一个 ClaudeGate 图标，双击即可打开。用安装包安装时，安装完成页也可以勾选「创建桌面快捷方式」。</p>
+      {info && (
+        <div className="row">
+          <span className="label">状态</span>
+          <span className="value">{info.exists ? <span className="tag ok">桌面已有快捷方式</span> : <span className="tag muted">尚未创建</span>}</span>
+        </div>
+      )}
+      <div className="contact-actions" style={{ marginTop: 8 }}>
+        <button className="btn" onClick={create}>{info?.exists ? "重新创建（指向当前程序）" : "创建桌面快捷方式"}</button>
+      </div>
+      {msg && <p className="sub">{msg}</p>}
+      {info && <p className="sub small">指向：{info.target}</p>}
+    </>
   );
 }
 

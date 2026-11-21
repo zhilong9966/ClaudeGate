@@ -123,3 +123,17 @@ pub async fn update_geo_db(state: State<'_, AppState>, force: bool) -> R<Vec<Str
     }
     Ok(out)
 }
+
+#[tauri::command]
+pub fn shortcut_info() -> R<crate::shortcut::ShortcutInfo> {
+    crate::shortcut::info().map_err(|e| e.to_string())
+}
+
+/// 在桌面创建（或覆盖）指向当前程序的快捷方式
+#[tauri::command]
+pub fn create_shortcut() -> R<crate::shortcut::ShortcutInfo> {
+    crate::shortcut::create().map_err(|e| {
+        log::error!("创建桌面快捷方式失败: {e}");
+        e.to_string()
+    })
+}

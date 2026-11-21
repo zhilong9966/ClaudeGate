@@ -7,6 +7,7 @@ mod launcher;
 mod logging;
 mod process;
 mod rules;
+mod shortcut;
 mod state;
 
 use std::collections::HashMap;
@@ -80,6 +81,8 @@ pub fn run() {
             commands::list_app_processes,
             commands::geo_db_status,
             commands::update_geo_db,
+            commands::shortcut_info,
+            commands::create_shortcut,
         ])
         .build(tauri::generate_context!())
         .expect("error while building ClaudeGate")
