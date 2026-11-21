@@ -68,3 +68,12 @@ td.params { display: flex; flex-wrap: wrap; gap: 8px 16px; }
 .empty { padding: 40px 0; text-align: center; color: var(--muted); font-size: 14px; }
 .btn.launch-codex { background: #10a37f; border-color: #10a37f; }
 .btn.launch-antigravity { background: #4285f4; border-color: #4285f4; }
+.support { max-width: 960px; }
+.contact { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+.email { font-size: 22px; font-weight: 700; margin-top: 4px; user-select: all; }
+.contact-actions { display: flex; gap: 8px; }
+.solutions { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; margin-bottom: 14px; }
+.solution { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.solution-title { font-weight: 600; font-size: 14px; }
+.grid.two { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+a { color: var(--accent); }

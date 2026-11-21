@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "./api";
 import Home from "./pages/Home";
 import Settings from "./pages/Settings";
+import Support from "./pages/Support";
 import type { AppProfile } from "./types";
 
 const ICON: Record<string, string> = { claude: "✳", codex: "◎", antigravity: "▲" };
@@ -29,6 +30,7 @@ export default function App() {
             </button>
           ))}
           <button className={page === "settings" ? "tab active" : "tab"} onClick={() => setPage("settings")}>系统配置</button>
+          <button className={page === "support" ? "tab active" : "tab"} onClick={() => setPage("support")}>支持中心</button>
         </nav>
       </header>
       <main>
@@ -39,6 +41,7 @@ export default function App() {
           </div>
         ))}
         {page === "settings" && <Settings onSaved={reload} />}
+        {page === "support" && <Support />}
       </main>
     </div>
   );

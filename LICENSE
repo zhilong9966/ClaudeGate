@@ -1,0 +1,121 @@
+ClaudeGate 许可协议（个人免费 / 企业授权）
+ClaudeGate License (Free for Personal Use / Commercial License Required)
+
+版本 1.0 · Version 1.0
+Copyright (c) 2026 zhilong9966. 保留所有权利 / All rights reserved.
+
+商务授权联系 / Commercial licensing: zhilongfeng66@gmail.com
+
+======================================================================
+中文
+======================================================================
+
+本软件（ClaudeGate，含源代码、二进制文件、文档及相关资源，以下简称"本软件"）
+以"源码公开、个人免费、企业授权"的方式提供。本协议不是 OSI 认证的开源协议。
+
+1. 定义
+   1.1 "个人使用"：自然人以个人身份、出于非商业目的使用本软件，包括个人学习、
+       研究、自用。
+   1.2 "企业使用"：任何公司、企业、机构、组织（含个体工商户、非营利组织、政府
+       机构、教育机构的行政用途）使用本软件，或任何人为上述主体工作、代表其
+       使用本软件，或将本软件用于任何直接或间接的商业目的（包括但不限于：对外
+       提供服务、集成进产品、内部生产环境部署、为客户部署或运维）。
+
+2. 个人使用授权（免费）
+   在遵守本协议的前提下，授予个人非独占、不可转让、免费的许可，可以：
+   (a) 下载、安装、运行本软件；
+   (b) 阅读、修改源代码供自己使用；
+   (c) 以非商业方式免费再分发未修改或修改后的副本，但须完整保留本协议、
+       版权声明，并在修改版本中明确标注已修改。
+
+3. 企业使用授权（需付费授权）
+   企业使用须事先取得版权人的书面商业授权。授权范围、期限、费用、设备数量及
+   技术支持等以双方签署的授权协议为准。请联系：zhilongfeng66@gmail.com
+
+4. 限制
+   未经版权人书面许可，不得：
+   (a) 出售、出租、转授权本软件或其修改版本，或以本软件为主要价值提供收费服务；
+   (b) 移除、遮盖或修改本软件中的版权声明、许可声明及支持中心联系方式；
+   (c) 以版权人名义或暗示版权人背书的方式推广衍生作品。
+
+5. 第三方组件
+   本软件使用的第三方开源组件仍适用其各自的许可协议，本协议不改变其条款。
+   本软件在运行时可能访问第三方网络服务，使用者应自行遵守相关服务条款。
+
+6. 使用者责任
+   本软件仅提供网络环境检测与进程管理功能。使用者应自行遵守所在地法律法规及
+   所使用的各 AI 服务（如 Anthropic、OpenAI、Google）的服务条款。因使用本软件
+   导致的账号限制、封禁或其他后果，由使用者自行承担。
+
+7. 免责声明
+   本软件按"现状"提供，不附带任何明示或默示的担保，包括但不限于适销性、特定
+   用途适用性及不侵权的担保。在任何情况下，版权人均不对因使用或无法使用本软件
+   而产生的任何直接、间接、附带、特殊或后果性损害承担责任。
+
+8. 终止
+   违反本协议任何条款，本协议授予的许可自动终止，使用者应立即停止使用并销毁
+   全部副本。
+
+9. 其他
+   本协议未尽事宜，以版权人与使用者另行签署的书面协议为准。
+   如本协议中英文版本不一致，以中文版本为准。
+
+======================================================================
+English
+======================================================================
+
+ClaudeGate (the "Software", including source code, binaries, documentation and
+related assets) is source-available, free for personal use, and requires a
+commercial license for organizational use. This is not an OSI-approved open
+source license.
+
+1. Definitions
+   1.1 "Personal Use" means use by a natural person, in an individual capacity,
+       for non-commercial purposes such as learning, research and private use.
+   1.2 "Commercial Use" means any use by or on behalf of a company, business,
+       institution or other organization (including sole proprietors,
+       non-profits, and administrative use by government or educational
+       bodies), or any use for direct or indirect commercial advantage,
+       including providing services to others, integrating into products,
+       internal production deployment, or deploying/operating for clients.
+
+2. Personal Use (free)
+   Subject to this License, you are granted a non-exclusive, non-transferable,
+   royalty-free license to (a) download, install and run the Software;
+   (b) read and modify the source code for your own use; and (c) redistribute
+   unmodified or modified copies free of charge for non-commercial purposes,
+   provided this License and all copyright notices are retained and modified
+   versions are clearly marked as modified.
+
+3. Commercial Use (license required)
+   Commercial Use requires a prior written commercial license from the
+   copyright holder. Scope, term, fees, seat count and support are governed by
+   the signed license agreement. Contact: zhilongfeng66@gmail.com
+
+4. Restrictions
+   Without prior written permission you may not: (a) sell, rent or sublicense
+   the Software or modified versions, or provide paid services whose primary
+   value is the Software; (b) remove, obscure or alter copyright notices,
+   license notices or the Support Center contact information; (c) use the
+   copyright holder's name to promote derivative works or imply endorsement.
+
+5. Third-party components remain under their own licenses. The Software may
+   access third-party network services at runtime; you are responsible for
+   complying with their terms.
+
+6. You are solely responsible for complying with applicable laws and with the
+   terms of service of the AI services you use (e.g. Anthropic, OpenAI,
+   Google). The copyright holder is not liable for any account restriction,
+   suspension or other consequence arising from your use of the Software.
+
+7. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+   COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY ARISING
+   FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR ITS USE.
+
+8. This License terminates automatically if you breach any of its terms; you
+   must then stop using and destroy all copies.
+
+9. In case of any discrepancy between the Chinese and English versions, the
+   Chinese version prevails.
