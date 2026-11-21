@@ -22,11 +22,19 @@ fn rules(cfg: &ProcessCfg) -> &[ProcessRule] {
     if cfg!(target_os = "macos") { &cfg.macos_rules } else { &cfg.windows_rules }
 }
 
-fn matches(r: &ProcessRule, name: &str, path: &str) -> bool {
+/// 名称、路径、命令行三个条件同时满足才命中；为空的条件不限制，但至少要有一个条件
+fn matches(r: &ProcessRule, name: &str, path: &str, cmd: &str) -> bool {
+    let any = |list: &[String], hay: &str| {
+        let h = hay.to_ascii_lowercase();
+        list.is_empty() || list.iter().any(|s| h.contains(&s.to_ascii_lowercase()))
+    };
     let name_ok = r.name.is_empty() || r.name.eq_ignore_ascii_case(name);
-    let p = path.to_ascii_lowercase();
-    let path_ok = r.path_contains.is_empty() || r.path_contains.iter().any(|s| p.contains(&s.to_ascii_lowercase()));
-    name_ok && path_ok && !(r.name.is_empty() && r.path_contains.is_empty())
+    let has_condition = !r.name.is_empty() || !r.path_contains.is_empty() || !r.cmd_contains.is_empty();
+    has_condition && name_ok && any(&r.path_contains, path) && any(&r.cmd_contains, cmd)
+}
+
+fn cmdline(p: &sysinfo::Process) -> String {
+    p.cmd().iter().map(|s| s.to_string_lossy()).collect::<Vec<_>>().join(" ")
 }
 
 fn snapshot() -> System {
@@ -77,10 +85,12 @@ fn targets(sys: &System, cfg: &ProcessCfg) -> Vec<Pid> {
     for (pid, p) in sys.processes() {
         let name = p.name().to_string_lossy();
         let path = p.exe().map(|e| e.to_string_lossy().into_owned()).unwrap_or_default();
-        if !rs.iter().any(|r| matches(r, &name, &path)) {
+        let cmd = cmdline(p);
+        if !rs.iter().any(|r| matches(r, &name, &path, &cmd)) {
             continue;
         }
-        if cfg.keep_standalone_cli && has(&path, &cfg.cli_markers) && !launched_by_desktop(*pid) {
+        let is_cli = has(&path, &cfg.cli_markers) || has(&cmd, &cfg.cli_markers);
+        if cfg.keep_standalone_cli && is_cli && !launched_by_desktop(*pid) {
             continue;
         }
         set.insert(*pid);
@@ -147,4 +157,31 @@ pub async fn kill_all(cfg: &ProcessCfg) -> KillReport {
     }
     report.remaining = list(cfg);
     report
+}
+
+#[cfg(test)]
+mod tests {
+    use super::matches;
+    use crate::config::claude_profile;
+
+    fn hit(name: &str, path: &str, cmd: &str) -> bool {
+        let p = claude_profile().process;
+        p.windows_rules.iter().any(|r| matches(r, name, path, cmd))
+    }
+
+    #[test]
+    fn claude_rules_cover_desktop_and_cli() {
+        // 桌面版
+        assert!(hit("Claude.exe", r"C:\Program Files\WindowsApps\Claude_6.28899.2.0_x64__pzs8sxrjxfjjc\app\Claude.exe", ""));
+        // WinGet 安装的 CLI
+        assert!(hit("claude.exe", r"C:\Users\A\AppData\Local\Microsoft\WinGet\Packages\Anthropic.ClaudeCode_Microsoft.Winget.Source_8wekyb3d8bbwe\claude.exe", ""));
+        // 官方安装脚本的 CLI
+        assert!(hit("claude.exe", r"C:\Users\A\.local\bin\claude.exe", ""));
+        // npm 安装的 CLI（进程是 node）
+        assert!(hit("node.exe", r"D:\Program Files\nodejs\node.exe", r"node C:\Users\A\AppData\Roaming\npm\node_modules\@anthropic-ai\claude-code\cli.js"));
+        // 其他 node / 其他程序不能误伤
+        assert!(!hit("node.exe", r"D:\Program Files\nodejs\node.exe", r"node C:\proj\server.js"));
+        assert!(!hit("Antigravity.exe", r"C:\Users\A\AppData\Local\Programs\antigravity\Antigravity.exe", ""));
+        assert!(!hit("claudegate.exe", r"E:\project\ClaudeDeskTool\src-tauri\target\release\claudegate.exe", ""));
+    }
 }

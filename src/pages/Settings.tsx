@@ -209,19 +209,21 @@ function ProcessTab({ app, upApp }: { app: AppProfile; upApp: (fn: (a: AppProfil
   return (
     <>
       <h3>进程匹配规则（{isMac ? "macOS" : "Windows"}）</h3>
-      <p className="sub">进程名与路径同时满足即命中；路径填多个时任一包含即可。</p>
+      <p className="sub">进程名、路径、命令行三项同时满足即命中（留空的项不限制）；一项里填多个时任一包含即可。</p>
       {rules.map((r, i) => (
         <div className="site" key={i}>
           <Text label="进程名（空=不限）" v={r.name} on={(v) => upApp((a) => { a.process[key][i].name = v; })} />
           <label className="field"><span>路径包含（逗号分隔）</span>
             <input defaultValue={csv(r.path_contains)} onBlur={(e) => upApp((a) => { a.process[key][i].path_contains = parseCsv(e.target.value); })} /></label>
+          <label className="field"><span>命令行包含（逗号分隔，用于 npm 安装的 CLI 等）</span>
+            <input defaultValue={csv(r.cmd_contains)} onBlur={(e) => upApp((a) => { a.process[key][i].cmd_contains = parseCsv(e.target.value); })} /></label>
           <button className="btn danger small" onClick={() => upApp((a) => { a.process[key].splice(i, 1); })}>删除</button>
         </div>
       ))}
-      <button className="btn" onClick={() => upApp((a) => { a.process[key].push({ name: "", path_contains: [] }); })}>+ 添加规则</button>
+      <button className="btn" onClick={() => upApp((a) => { a.process[key].push({ name: "", path_contains: [], cmd_contains: [] }); })}>+ 添加规则</button>
       <h3>结束策略</h3>
       <Check label="连同子进程一起结束（MCP server、终端、language server 等）" v={app.process.kill_children} on={(v) => upApp((a) => { a.process.kill_children = v; })} />
-      <Check label="保留独立运行的 CLI（不是由桌面版拉起的）" v={app.process.keep_standalone_cli} on={(v) => upApp((a) => { a.process.keep_standalone_cli = v; })} />
+      <Check label="保留独立运行的 CLI（不勾选 = 关闭时连同终端里单独运行的 CLI 一起结束）" v={app.process.keep_standalone_cli} on={(v) => upApp((a) => { a.process.keep_standalone_cli = v; })} />
       <label className="field"><span>CLI 路径特征（逗号分隔）</span>
         <input defaultValue={csv(app.process.cli_markers)} onBlur={(e) => upApp((a) => { a.process.cli_markers = parseCsv(e.target.value); })} /></label>
       <label className="field"><span>桌面版路径特征（逗号分隔）</span>

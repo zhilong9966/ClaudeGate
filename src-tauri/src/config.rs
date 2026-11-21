@@ -5,7 +5,7 @@ use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-pub const CONFIG_VERSION: u32 = 2;
+pub const CONFIG_VERSION: u32 = 3;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -148,6 +148,8 @@ pub struct ProcessRule {
     pub name: String,
     /// 可执行路径包含任意一个即命中（不区分大小写），为空表示不限
     pub path_contains: Vec<String>,
+    /// 命令行包含任意一个即命中（不区分大小写），为空表示不限。用于 npm 安装的 CLI（进程本身是 node）
+    pub cmd_contains: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -300,8 +302,30 @@ fn strs(v: &[&str]) -> Vec<String> {
 }
 
 fn prule(name: &str, paths: &[&str]) -> ProcessRule {
-    ProcessRule { name: name.into(), path_contains: strs(paths) }
+    ProcessRule { name: name.into(), path_contains: strs(paths), cmd_contains: vec![] }
 }
+
+fn crule(name: &str, cmds: &[&str]) -> ProcessRule {
+    ProcessRule { name: name.into(), path_contains: vec![], cmd_contains: strs(cmds) }
+}
+
+/// 独立安装的 Claude Code CLI（WinGet / 官方安装脚本 / npm）
+fn claude_cli_rules_windows() -> Vec<ProcessRule> {
+    vec![
+        prule("claude.exe", &["WinGet\\Packages\\Anthropic.ClaudeCode", "\\.local\\bin\\", "\\.local\\share\\claude\\", "\\.claude\\local\\"]),
+        crule("node.exe", &["@anthropic-ai\\claude-code", "@anthropic-ai/claude-code"]),
+    ]
+}
+
+/// 独立安装的 Claude Code CLI（官方安装脚本 / npm；Homebrew 路径含 claude-code，已被原规则覆盖）
+fn claude_cli_rules_macos() -> Vec<ProcessRule> {
+    vec![
+        prule("claude", &["/.local/share/claude/", "/.local/bin/", "/.claude/local/"]),
+        crule("node", &["@anthropic-ai/claude-code"]),
+    ]
+}
+
+const CLAUDE_CLI_MARKERS: &[&str] = &["claude-code", "Anthropic.ClaudeCode", ".local", "@anthropic-ai"];
 
 fn probe(name: &str, url: &str, required: bool, max_latency_ms: u64) -> Probe {
     Probe { name: name.into(), url: url.into(), required, max_latency_ms }
@@ -349,17 +373,27 @@ pub fn claude_profile() -> AppProfile {
         },
         checks: default_checks(BLOCKED),
         process: ProcessCfg {
-            windows_rules: vec![
-                prule("Claude.exe", &["WindowsApps\\Claude_", "AnthropicClaude"]),
-                prule("claude.exe", &["Claude-Data", "claude-code"]),
-                prule("Squirrel.exe", &["AnthropicClaude"]),
-            ],
-            macos_rules: vec![
-                prule("", &["/Applications/Claude.app/"]),
-                prule("ShipIt", &["com.anthropic"]),
-                prule("claude", &["claude-code"]),
-            ],
-            cli_markers: strs(&["claude-code"]),
+            windows_rules: [
+                vec![
+                    prule("Claude.exe", &["WindowsApps\\Claude_", "AnthropicClaude"]),
+                    prule("claude.exe", &["Claude-Data", "claude-code"]),
+                    prule("Squirrel.exe", &["AnthropicClaude"]),
+                ],
+                claude_cli_rules_windows(),
+            ]
+            .concat(),
+            macos_rules: [
+                vec![
+                    prule("", &["/Applications/Claude.app/"]),
+                    prule("ShipIt", &["com.anthropic"]),
+                    prule("claude", &["claude-code"]),
+                ],
+                claude_cli_rules_macos(),
+            ]
+            .concat(),
+            // 关闭 Claude 时连同独立运行的 CLI 一起结束
+            keep_standalone_cli: false,
+            cli_markers: strs(CLAUDE_CLI_MARKERS),
             desktop_markers: strs(&["WindowsApps\\Claude_", "AnthropicClaude", "/Applications/Claude.app/"]),
             ..Default::default()
         },
@@ -427,19 +461,47 @@ pub fn antigravity_profile() -> AppProfile {
 }
 
 impl AppConfig {
-    /// 读取配置；旧版本配置直接换成默认值；缺失的检测项用默认值补齐
+    /// 读取配置；v1 直接换成默认值，v2 迁移到 v3；缺失的检测项用默认值补齐
     pub fn load(path: &PathBuf) -> Self {
         let mut cfg: AppConfig = std::fs::read_to_string(path)
             .ok()
             .and_then(|s| serde_json::from_str(&s).ok())
-            .filter(|c: &AppConfig| c.version == CONFIG_VERSION)
+            .filter(|c: &AppConfig| c.version >= 2)
             .unwrap_or_default();
+        if cfg.version == 2 {
+            cfg.migrate_v2();
+        }
         for app in &mut cfg.apps {
             for (k, v) in default_checks(BLOCKED) {
                 app.checks.entry(k).or_insert(v);
             }
         }
         cfg
+    }
+
+    /// v2 → v3：Claude 的关闭规则加入独立 CLI，保留用户已有的其他改动
+    fn migrate_v2(&mut self) {
+        if let Some(claude) = self.apps.iter_mut().find(|a| a.id == "claude") {
+            let p = &mut claude.process;
+            let same = |x: &ProcessRule, r: &ProcessRule| x.name == r.name && x.path_contains == r.path_contains && x.cmd_contains == r.cmd_contains;
+            for r in claude_cli_rules_windows() {
+                if !p.windows_rules.iter().any(|x| same(x, &r)) {
+                    p.windows_rules.push(r);
+                }
+            }
+            for r in claude_cli_rules_macos() {
+                if !p.macos_rules.iter().any(|x| same(x, &r)) {
+                    p.macos_rules.push(r);
+                }
+            }
+            for m in CLAUDE_CLI_MARKERS {
+                if !p.cli_markers.iter().any(|x| x == m) {
+                    p.cli_markers.push(m.to_string());
+                }
+            }
+            p.keep_standalone_cli = false;
+        }
+        self.version = CONFIG_VERSION;
     }
 
     pub fn save(&self, path: &PathBuf) -> anyhow::Result<()> {
@@ -477,5 +539,32 @@ impl CheckRule {
             .and_then(|v| v.as_array())
             .map(|a| a.iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect())
             .unwrap_or_default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn migrate_v2_adds_cli_rules_and_keeps_user_rules() {
+        let mut cfg = AppConfig::default();
+        cfg.version = 2;
+        let claude = cfg.apps.iter_mut().find(|a| a.id == "claude").unwrap();
+        claude.process.windows_rules.truncate(3); // v2 时只有桌面版规则
+        claude.process.windows_rules.push(prule("custom.exe", &["X"])); // 用户自己加的
+        claude.process.keep_standalone_cli = true;
+        cfg.migrate_v2();
+        let p = &cfg.app("claude").unwrap().process;
+        assert_eq!(cfg.version, CONFIG_VERSION);
+        assert!(!p.keep_standalone_cli);
+        assert!(p.windows_rules.iter().any(|r| r.name == "custom.exe"));
+        assert!(p.windows_rules.iter().any(|r| r.path_contains.iter().any(|s| s.contains("Anthropic.ClaudeCode"))));
+        assert!(p.windows_rules.iter().any(|r| r.name == "node.exe"));
+        // 再迁移一次不会重复添加
+        let n = p.windows_rules.len();
+        cfg.version = 2;
+        cfg.migrate_v2();
+        assert_eq!(cfg.app("claude").unwrap().process.windows_rules.len(), n);
     }
 }

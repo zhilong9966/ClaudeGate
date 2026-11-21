@@ -34,7 +34,7 @@ export interface CustomSite {
   name: string; domain: string; egress_mode: string; egress_url: string; egress_json_field: string;
   resolve_ingress: boolean; required: boolean; egress_same_as_claude: boolean; egress_countries: string[];
 }
-export interface ProcessRule { name: string; path_contains: string[] }
+export interface ProcessRule { name: string; path_contains: string[]; cmd_contains: string[] }
 export interface Probe { name: string; url: string; required: boolean; max_latency_ms: number }
 export interface ProcessCfg {
   windows_rules: ProcessRule[]; macos_rules: ProcessRule[]; kill_children: boolean;
