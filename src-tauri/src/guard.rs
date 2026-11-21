@@ -153,8 +153,8 @@ pub async fn fw_sync(handle: &AppHandle) -> bool {
 }
 
 /// 记录应用当前运行的可执行文件路径（防火墙规则需要精确路径）
-fn remember_paths(st: &AppState, profile: &AppProfile) {
-    let procs = crate::process::list(&profile.process);
+fn remember_paths(st: &AppState, sys: &sysinfo::System, profile: &AppProfile) {
+    let procs = crate::process::list_in(sys, &profile.process);
     let mut fw = st.fw.lock().unwrap();
     let set = fw.known_paths.entry(profile.id.clone()).or_default();
     for p in procs.into_iter().filter(|p| !p.path.is_empty()) {
@@ -215,9 +215,12 @@ async fn tick(handle: &AppHandle) {
     // IPv6 出口每轮只探测一次，所有应用共用
     let mut v6_cache: Option<crate::detect::ipv6::Ipv6Facts> = None;
 
+    // 每轮只拍一次进程快照，所有应用共用（放到阻塞线程，避免占用异步运行时）
+    let Ok(sys) = tauri::async_runtime::spawn_blocking(crate::process::snapshot).await else { return };
+
     for profile in cfg.apps.iter().filter(|a| a.enabled) {
         let id = profile.id.clone();
-        let running = crate::process::is_running(&profile.process);
+        let running = crate::process::is_running_in(&sys, &profile.process);
         // 先在锁内取状态，锁释放后再做异步操作
         let existing: Result<Option<AppGuard>, bool> = {
             let mut guards = st.guards.lock().unwrap();
@@ -238,7 +241,7 @@ async fn tick(handle: &AppHandle) {
                 continue;
             }
         };
-        remember_paths(&st, profile);
+        remember_paths(&st, &sys, profile);
         let mut ag = match existing {
             Some(a) => a,
             None if g.monitor_external_launch => {

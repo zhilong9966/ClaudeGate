@@ -3,7 +3,7 @@ use crate::config::{ProcessCfg, ProcessRule};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
-use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, RefreshKind, System};
+use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ProcInfo {
@@ -37,7 +37,21 @@ fn cmdline(p: &sysinfo::Process) -> String {
     p.cmd().iter().map(|s| s.to_string_lossy()).collect::<Vec<_>>().join(" ")
 }
 
-fn snapshot() -> System {
+/// 进程快照：只读取匹配所需的路径和命令行（不读内存、环境变量、磁盘 IO、CPU 等），只扫描一遍
+pub fn snapshot() -> System {
+    let mut sys = System::new();
+    sys.refresh_processes_specifics(
+        ProcessesToUpdate::All,
+        true,
+        ProcessRefreshKind::nothing().with_exe(UpdateKind::Always).with_cmd(UpdateKind::Always),
+    );
+    sys
+}
+
+/// 旧版快照方式（仅用于性能对比测试）
+#[cfg(test)]
+fn snapshot_old() -> System {
+    use sysinfo::RefreshKind;
     let mut sys = System::new_with_specifics(RefreshKind::nothing().with_processes(ProcessRefreshKind::everything()));
     sys.refresh_processes(ProcessesToUpdate::All, true);
     sys
@@ -125,14 +139,18 @@ fn targets(sys: &System, cfg: &ProcessCfg) -> Vec<Pid> {
     v
 }
 
-/// 列出当前匹配到的 Claude 相关进程
+/// 列出当前匹配到的进程
 pub fn list(cfg: &ProcessCfg) -> Vec<ProcInfo> {
-    let sys = snapshot();
-    targets(&sys, cfg).into_iter().filter_map(|p| info(&sys, p)).collect()
+    list_in(&snapshot(), cfg)
 }
 
-pub fn is_running(cfg: &ProcessCfg) -> bool {
-    !list(cfg).is_empty()
+/// 在已有快照上列出（守护每轮只拍一次快照，多个应用共用）
+pub fn list_in(sys: &System, cfg: &ProcessCfg) -> Vec<ProcInfo> {
+    targets(sys, cfg).into_iter().filter_map(|p| info(sys, p)).collect()
+}
+
+pub fn is_running_in(sys: &System, cfg: &ProcessCfg) -> bool {
+    !targets(sys, cfg).is_empty()
 }
 
 pub async fn kill_all(cfg: &ProcessCfg) -> KillReport {
@@ -169,6 +187,19 @@ pub async fn kill_all(cfg: &ProcessCfg) -> KillReport {
 #[cfg(test)]
 mod tests {
     use super::matches;
+
+    /// 快照耗时对比：cargo test --lib snapshot_cost -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn snapshot_cost() {
+        let t = std::time::Instant::now();
+        let n_old = super::snapshot_old().processes().len();
+        let old = t.elapsed();
+        let t = std::time::Instant::now();
+        let n_new = super::snapshot().processes().len();
+        let new = t.elapsed();
+        println!("旧快照：{n_old} 个进程 {old:?}；新快照：{n_new} 个进程 {new:?}");
+    }
     use crate::config::claude_profile;
 
     fn hit(name: &str, path: &str, cmd: &str) -> bool {
