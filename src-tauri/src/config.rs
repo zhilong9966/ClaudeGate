@@ -26,6 +26,9 @@ pub struct General {
     pub kill_apps_on_exit: bool,
     /// 点窗口关闭按钮时最小化到托盘（守护继续运行），而不是退出
     pub close_to_tray: bool,
+    /// 开机自启，并静默进入托盘
+    pub autostart: bool,
+    pub firewall: FirewallCfg,
     pub guard: Guard,
     pub log: LogCfg,
 }
@@ -39,6 +42,23 @@ pub struct LogCfg {
     pub level: String,
     /// 自动删除多少天前的日志，0 = 不删除
     pub retention_days: u64,
+}
+
+/// 防火墙断网保护（Windows，需要一次管理员授权）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct FirewallCfg {
+    pub enabled: bool,
+    /// 网络异常时先用防火墙切断该应用的网络，再结束进程（零泄露窗口）
+    pub block_before_kill: bool,
+    /// 未通过检测前禁止受保护应用联网（直接双击打开也连不上网，直到 PureGate 检测通过）
+    pub block_until_checked: bool,
+}
+
+impl Default for FirewallCfg {
+    fn default() -> Self {
+        Self { enabled: true, block_before_kill: true, block_until_checked: false }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -58,6 +78,8 @@ pub struct Guard {
     pub monitor_external_launch: bool,
     /// 终止时弹系统通知
     pub notify: bool,
+    /// 网卡 / IP / 路由一变化就立即复检（不等快速复检间隔）
+    pub recheck_on_network_change: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -232,7 +254,7 @@ impl Default for AppConfig {
 
 impl Default for General {
     fn default() -> Self {
-        Self { auto_check_on_open: false, auto_launch_when_pass: false, kill_apps_on_exit: false, close_to_tray: true, guard: Guard::default(), log: LogCfg::default() }
+        Self { auto_check_on_open: false, auto_launch_when_pass: false, kill_apps_on_exit: false, close_to_tray: true, autostart: true, firewall: FirewallCfg::default(), guard: Guard::default(), log: LogCfg::default() }
     }
 }
 
@@ -274,6 +296,7 @@ impl Default for Guard {
             full_check_minutes: 5,
             monitor_external_launch: true,
             notify: true,
+            recheck_on_network_change: true,
         }
     }
 }
@@ -423,6 +446,8 @@ const BLOCKED: &[&str] = &["CN", "HK", "MO", "RU", "IR", "KP", "SY", "CU", "BY",
 pub fn default_checks(blocked: &[&str]) -> BTreeMap<String, CheckRule> {
     let mut m = BTreeMap::new();
     m.insert("egress_ip".into(), rule(true, true, json!({})));
+    // 固定出口 IP 白名单：名单为空时不限制；填了以后出口不在名单内 → 禁止启动 / 立即终止
+    m.insert("egress_allowlist".into(), rule(true, true, json!({ "ips": [] })));
     m.insert("region".into(), rule(true, true, json!({ "allowed_countries": [], "blocked_countries": blocked })));
     m.insert("trust_score".into(), rule(true, true, json!({ "min": 80, "fail_when_no_data": false })));
     m.insert("ip_type".into(), rule(true, false, json!({ "require_residential": true })));

@@ -13,5 +13,10 @@ export const api = {
   geoDbStatus: () => invoke<DbStatus>("geo_db_status"),
   updateGeoDb: (force: boolean) => invoke<string[]>("update_geo_db", { force }),
   shortcutInfo: () => invoke<{ path: string; exists: boolean; target: string }>("shortcut_info"),
+  addToAllowlist: (appId: string, ip: string, note: string) => invoke<AppConfig>("add_to_allowlist", { appId, ip, note }),
+  firewallStatus: () => invoke<{ supported: boolean; installed: boolean; blocked: string[] }>("firewall_status"),
+  firewallInstall: () => invoke<void>("firewall_install"),
+  firewallUninstall: () => invoke<void>("firewall_uninstall"),
+  firewallUnblock: (appId: string) => invoke<void>("firewall_unblock", { appId }),
   createShortcut: () => invoke<{ path: string; exists: boolean; target: string }>("create_shortcut"),
 };

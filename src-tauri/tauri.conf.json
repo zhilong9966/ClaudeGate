@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "PureGate",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "identifier": "com.zhilong.claudegate",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -16,7 +16,8 @@
         "width": 1180,
         "height": 860,
         "minWidth": 900,
-        "minHeight": 640
+        "minHeight": 640,
+        "visible": false
       }
     ],
     "security": {

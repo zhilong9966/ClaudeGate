@@ -76,6 +76,12 @@ pub fn decide_quick(g: &mut AppGuard, cfg: &GuardCfg, app: &AppProfile, obs: Res
             if let Some(r) = region_violation(app, &country) {
                 return Some(format!("{r}（{ip}）"));
             }
+            if crate::allowlist::check(app, &ip) == Some(false) {
+                if app.rule(crate::allowlist::CHECK_ID).map(|r| r.required).unwrap_or(false) {
+                    return Some(format!("出口 {ip} 不在固定 IP 白名单内"));
+                }
+                log::warn!("[{}] 出口 {ip} 不在白名单内（非硬性，仅提醒）", app.id);
+            }
             match &g.baseline {
                 None => {
                     g.baseline = Some(ip);
@@ -99,12 +105,99 @@ fn notify(app: &AppHandle, title: &str, body: &str) {
     }
 }
 
+/// 防火墙断网保护：按当前运行时状态计算期望规则，与上次下发的不同就同步一次（阻塞等待结果）。
+/// 未启用 / 未授权时不做任何事。返回是否已下发成功。
+pub async fn fw_sync(handle: &AppHandle) -> bool {
+    let st = handle.state::<AppState>();
+    let cfg = st.config();
+    if !crate::firewall::supported() {
+        return false;
+    }
+    let desired = {
+        let fw = st.fw.lock().unwrap();
+        let ids: Vec<String> = cfg.apps.iter().filter(|a| a.enabled).map(|a| a.id.clone()).collect();
+        let mut d = fw.desired(&ids, cfg.general.firewall.block_until_checked);
+        if !cfg.general.firewall.enabled {
+            d.values_mut().for_each(|a| a.block = false);
+        }
+        if d == fw.applied {
+            return true;
+        }
+        d
+    };
+    let installed = tauri::async_runtime::spawn_blocking(crate::firewall::installed).await.unwrap_or(false);
+    if !installed {
+        return false;
+    }
+    let to_apply = desired.clone();
+    match tauri::async_runtime::spawn_blocking(move || crate::firewall::apply(&to_apply)).await {
+        Ok(Ok(r)) => {
+            let blocked: Vec<&String> = desired.iter().filter(|(_, a)| a.block).map(|(id, _)| id).collect();
+            if r.ok {
+                log::info!("防火墙规则已同步，当前阻断：{blocked:?}（{}）", r.message);
+            } else {
+                log::warn!("防火墙规则同步部分失败：{}", r.message);
+            }
+            st.fw.lock().unwrap().applied = desired;
+            r.ok
+        }
+        Ok(Err(e)) => {
+            log::error!("防火墙规则同步失败：{e}");
+            false
+        }
+        Err(e) => {
+            log::error!("防火墙同步任务异常：{e}");
+            false
+        }
+    }
+}
+
+/// 记录应用当前运行的可执行文件路径（防火墙规则需要精确路径）
+fn remember_paths(st: &AppState, profile: &AppProfile) {
+    let procs = crate::process::list(&profile.process);
+    let mut fw = st.fw.lock().unwrap();
+    let set = fw.known_paths.entry(profile.id.clone()).or_default();
+    for p in procs.into_iter().filter(|p| !p.path.is_empty()) {
+        set.insert(p.path);
+    }
+}
+
 /// 启动常驻监控任务（setup 时调用一次）
 pub fn spawn_monitor(handle: AppHandle) {
+    let _ = crate::netwatch::start();
     tauri::async_runtime::spawn(async move {
+        // 启动时先按配置同步一次防火墙（开启「未通过检测前禁止联网」时立即生效）
+        fw_sync(&handle).await;
+        let mut snap = crate::netwatch::snapshot();
+        let mut last_tick = Instant::now();
         loop {
-            let interval = handle.state::<AppState>().config().general.guard.interval_sec.max(5);
-            tokio::time::sleep(Duration::from_secs(interval)).await;
+            let g = handle.state::<AppState>().config().general.guard;
+            let changed = tokio::select! {
+                _ = tokio::time::sleep(Duration::from_secs(g.interval_sec.max(5))) => false,
+                _ = crate::netwatch::notifier().notified() => true,
+            };
+            if changed {
+                if !g.recheck_on_network_change {
+                    continue;
+                }
+                // 等路由稳定，并把这段时间内的连续变化合并成一次
+                tokio::time::sleep(Duration::from_millis(1500)).await;
+                let _ = tokio::time::timeout(Duration::from_millis(1), crate::netwatch::notifier().notified()).await;
+                let now = crate::netwatch::snapshot();
+                let what = crate::netwatch::diff(&snap, &now);
+                snap = now;
+                let guarding = !handle.state::<AppState>().guards.lock().unwrap().is_empty();
+                // 刚复检过（3 秒内）就不重复
+                if last_tick.elapsed() < Duration::from_secs(3) {
+                    continue;
+                }
+                if guarding {
+                    log::info!("检测到网络变化：{what}，立即复检");
+                } else {
+                    log::debug!("检测到网络变化：{what}");
+                }
+            }
+            last_tick = Instant::now();
             tick(&handle).await;
         }
     });
@@ -125,17 +218,27 @@ async fn tick(handle: &AppHandle) {
     for profile in cfg.apps.iter().filter(|a| a.enabled) {
         let id = profile.id.clone();
         let running = crate::process::is_running(&profile.process);
-        let existing = {
+        // 先在锁内取状态，锁释放后再做异步操作
+        let existing: Result<Option<AppGuard>, bool> = {
             let mut guards = st.guards.lock().unwrap();
-            if !running {
-                if guards.remove(&id).is_some() {
+            if running { Ok(guards.get(&id).cloned()) } else { Err(guards.remove(&id).is_some()) }
+        };
+        let existing = match existing {
+            Ok(e) => e,
+            Err(was_guarded) => {
+                if was_guarded {
                     log::info!("[{id}] {} 已退出，守护结束", profile.name);
                     emit(handle, &id, "stopped", format!("{} 已退出", profile.name));
                 }
+                // 应用退出后收回联网授权（开启「未通过检测前禁止联网」时会重新阻断）
+                let deauth = st.fw.lock().unwrap().authorized.remove(&id);
+                if deauth {
+                    fw_sync(handle).await;
+                }
                 continue;
             }
-            guards.get(&id).cloned()
         };
+        remember_paths(&st, profile);
         let mut ag = match existing {
             Some(a) => a,
             None if g.monitor_external_launch => {
@@ -183,6 +286,10 @@ async fn tick(handle: &AppHandle) {
             ag.last_full = Some(Instant::now());
             if rep.can_launch {
                 log::info!("[{id}] 完整复检通过");
+                let newly = st.fw.lock().unwrap().authorized.insert(id.clone());
+                if newly {
+                    fw_sync(handle).await;
+                }
                 if ag.baseline.is_none() {
                     ag.baseline = rep.facts.egress.as_ref().map(|e| e.ip.clone());
                 }
@@ -202,6 +309,17 @@ async fn tick(handle: &AppHandle) {
             Some(r) => {
                 let r = if ag.external { format!("{r}（该应用未经 PureGate 检测启动）") } else { r };
                 log::warn!("[{id}] 网络异常，自动终止 {}：{r}", profile.name);
+                // 先用防火墙切断网络，再结束进程
+                {
+                    let mut fw = st.fw.lock().unwrap();
+                    fw.authorized.remove(&id);
+                    if cfg.general.firewall.block_before_kill {
+                        fw.killed.insert(id.clone());
+                    }
+                }
+                if cfg.general.firewall.enabled && cfg.general.firewall.block_before_kill && fw_sync(handle).await {
+                    log::warn!("[{id}] 已用防火墙切断 {} 的网络", profile.name);
+                }
                 let k = crate::process::kill_all(&profile.process).await;
                 let msg = format!("{r}。已结束 {} 个进程{}", k.killed.len(), if k.remaining.is_empty() { String::new() } else { format!("，残留 {} 个", k.remaining.len()) });
                 if g.notify {

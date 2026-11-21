@@ -11,6 +11,7 @@ const PER_APP: [Section, string][] = [
   ["sites", "自定义站点"], ["process", "进程管理"],
 ];
 
+const NL = String.fromCharCode(10);
 const csv = (v: unknown) => (Array.isArray(v) ? v.join(", ") : "");
 const parseCsv = (s: string) => s.split(/[,，\s]+/).map((x) => x.trim()).filter(Boolean);
 
@@ -79,6 +80,7 @@ export default function Settings({ onSaved }: { onSaved: () => void }) {
             <Check label="打开 PureGate 时自动检测当前标签" v={cfg.general.auto_check_on_open} on={(v) => up((c) => { c.general.auto_check_on_open = v; })} />
             <Check label="检测全部通过后自动启动应用" v={cfg.general.auto_launch_when_pass} on={(v) => up((c) => { c.general.auto_launch_when_pass = v; })} />
             <Check label="退出 PureGate 时同时关闭所有已启用的应用" v={cfg.general.kill_apps_on_exit} on={(v) => up((c) => { c.general.kill_apps_on_exit = v; })} />
+            <Check label="开机自启，并静默进入托盘（开机后守护就在运行）" v={cfg.general.autostart} on={(v) => up((c) => { c.general.autostart = v; })} />
             <Check label="点关闭按钮时最小化到托盘（推荐，守护继续运行；从托盘菜单「退出」才真正退出）" v={cfg.general.close_to_tray} on={(v) => up((c) => { c.general.close_to_tray = v; })} />
             <ShortcutPanel />
             <h3>网络异常自动终止（运行期守护）</h3>
@@ -94,6 +96,8 @@ export default function Settings({ onSaved }: { onSaved: () => void }) {
             <Num label="连续失败几次才终止（防止网络抖动误杀）" v={cfg.general.guard.fail_threshold} on={(v) => up((c) => { c.general.guard.fail_threshold = v; })} />
             <Check label="也监控不是通过 PureGate 启动的应用（发现后立即完整检测，不通过就终止）" v={cfg.general.guard.monitor_external_launch} on={(v) => up((c) => { c.general.guard.monitor_external_launch = v; })} />
             <Check label="终止时弹系统通知" v={cfg.general.guard.notify} on={(v) => up((c) => { c.general.guard.notify = v; })} />
+            <Check label="网卡 / IP / 路由一变化就立即复检（VPN 断开马上发现，不等间隔）" v={cfg.general.guard.recheck_on_network_change} on={(v) => up((c) => { c.general.guard.recheck_on_network_change = v; })} />
+            <FirewallPanel cfg={cfg} up={up} />
             <h3>日志</h3>
             <p className="sub">记录启动、每次检测的每一项结果、启动 / 关闭的进程、守护触发、离线库更新和错误。每天一个文件：claudegate-日期.log。保存后立即生效。</p>
             <Text label="日志保存目录" v={cfg.general.log.dir} on={(v) => up((c) => { c.general.log.dir = v; })} />
@@ -156,7 +160,11 @@ export default function Settings({ onSaved }: { onSaved: () => void }) {
                       {Object.entries(r).filter(([k]) => k !== "enabled" && k !== "required").map(([k, v]) => (
                         <label key={k} className="param">
                           <span>{PARAM_TITLES[k] ?? k}</span>
-                          {typeof v === "boolean" ? (
+                          {k === "ips" && Array.isArray(v) ? (
+                            <textarea key={app.id} rows={4} className="ips" defaultValue={(v as string[]).join(NL)}
+                              placeholder={`66.227.98.150 # 家里${NL}66.227.98.0/24`}
+                              onBlur={(e) => upApp((a) => { a.checks[id][k] = e.target.value.split(NL).map((x) => x.trim()).filter(Boolean); })} />
+                          ) : typeof v === "boolean" ? (
                             <input type="checkbox" checked={v} onChange={(e) => upApp((a) => { a.checks[id][k] = e.target.checked; })} />
                           ) : typeof v === "number" ? (
                             <input type="number" value={v} onChange={(e) => upApp((a) => { a.checks[id][k] = Number(e.target.value); })} />
@@ -218,6 +226,51 @@ export default function Settings({ onSaved }: { onSaved: () => void }) {
         {section === "process" && <ProcessTab key={app.id} app={app} upApp={upApp} />}
       </section>
     </div>
+  );
+}
+
+function FirewallPanel({ cfg, up }: { cfg: AppConfig; up: (fn: (c: AppConfig) => void) => void }) {
+  const [st, setSt] = useState<{ supported: boolean; installed: boolean; blocked: string[] } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const refresh = () => api.firewallStatus().then(setSt).catch(() => {});
+  useEffect(() => { refresh(); }, []);
+  const fw = cfg.general.firewall;
+  async function act(fn: () => Promise<void>, ok: string) {
+    setBusy(true); setMsg("");
+    try { await fn(); setMsg(ok); } catch (e) { setMsg("失败：" + e); }
+    setBusy(false); refresh();
+  }
+  return (
+    <>
+      <h3>防火墙断网保护</h3>
+      <p className="sub">
+        网络异常时先用系统防火墙切断受保护应用的网络，再结束进程，做到零泄露窗口。修改防火墙需要管理员权限：
+        点「授权」会弹<b>一次</b> UAC，之后断网 / 恢复都自动完成，不再弹窗。只会创建名为 PureGate-Block-* 的出站阻止规则。
+      </p>
+      {st && !st.supported && <p className="sub">当前系统暂不支持（目前仅 Windows）。</p>}
+      {st?.supported && (
+        <>
+          <div className="row"><span className="label">授权状态</span><span className="value">
+            {st.installed ? <span className="tag ok">已授权</span> : <span className="tag warn">未授权（防火墙保护不会生效）</span>}
+          </span></div>
+          <div className="row"><span className="label">当前被阻断</span><span className="value">{st.blocked.length ? st.blocked.join("、") : "无"}</span></div>
+          <div className="contact-actions" style={{ marginTop: 8 }}>
+            {st.installed
+              ? <button className="btn" disabled={busy} onClick={() => act(api.firewallUninstall, "已取消授权，并清除了全部 PureGate 防火墙规则")}>取消授权</button>
+              : <button className="btn primary" disabled={busy} onClick={() => act(api.firewallInstall, "授权成功")}>{busy ? "等待 UAC…" : "授权（弹一次 UAC）"}</button>}
+            {st.blocked.map((id) => (
+              <button key={id} className="btn" disabled={busy} onClick={() => act(() => api.firewallUnblock(id), `已解除 ${id} 的阻断`)}>解除 {id} 阻断</button>
+            ))}
+          </div>
+          {msg && <p className="sub">{msg}</p>}
+          <Check label="启用防火墙断网保护（需已授权）" v={fw.enabled} on={(v) => up((c) => { c.general.firewall.enabled = v; })} />
+          <Check label="网络异常时先断网、再结束进程" v={fw.block_before_kill} on={(v) => up((c) => { c.general.firewall.block_before_kill = v; })} />
+          <Check label="未通过检测前禁止联网（直接双击打开应用也连不上网，直到 PureGate 检测通过）" v={fw.block_until_checked} on={(v) => up((c) => { c.general.firewall.block_until_checked = v; })} />
+          <p className="sub small">规则按程序的精确路径生效。应用升级后路径会变，PureGate 在应用运行时会自动记录新路径。</p>
+        </>
+      )}
+    </>
   );
 }
 

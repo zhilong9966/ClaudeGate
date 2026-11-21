@@ -78,6 +78,16 @@ pub fn evaluate(app: &AppProfile, f: Facts) -> Report {
         })
     });
 
+    // 白名单为空时不出现这一项
+    if let Some(ip) = egress_ip.clone() {
+        if crate::allowlist::check(app, &ip).is_some() {
+            c.check(crate::allowlist::CHECK_ID, "固定出口 IP 白名单", |_| {
+                let ok = crate::allowlist::check(app, &ip)?;
+                Some((ok, if ok { format!("{ip} 在白名单内") } else { format!("{ip} 不在白名单内（账号绑定的出口：{}）", crate::allowlist::entries(app).join("、")) }))
+            });
+        }
+    }
+
     c.check("region", &format!("{name} 支持地区"), |r| {
         let cc = egress_cc.clone()?;
         let allowed = upper(r.list("allowed_countries"));

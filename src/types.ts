@@ -70,9 +70,12 @@ export interface AppConfig {
   general: {
     auto_check_on_open: boolean; auto_launch_when_pass: boolean; kill_apps_on_exit: boolean;
     close_to_tray: boolean;
+    autostart: boolean;
+    firewall: { enabled: boolean; block_before_kill: boolean; block_until_checked: boolean };
     guard: {
       enabled: boolean; interval_sec: number; kill_on_ip_change: boolean; kill_on_fail: boolean;
       fail_threshold: number; full_check_minutes: number; monitor_external_launch: boolean; notify: boolean;
+      recheck_on_network_change: boolean;
     };
     log: { dir: string; level: string; retention_days: number };
   };
@@ -85,7 +88,7 @@ export interface AppConfig {
 }
 
 export const CHECK_TITLES: Record<string, string> = {
-  egress_ip: "出口 IP 获取", region: "支持地区", trust_score: "信任评分",
+  egress_ip: "出口 IP 获取", egress_allowlist: "固定出口 IP 白名单（为空不限制）", region: "支持地区", trust_score: "信任评分",
   ip_type: "IP 属性（住宅/机房）", vpn: "VPN", proxy: "代理 (Proxy)", tor: "Tor",
   crawler: "机器人 (Crawler)", abuser: "滥用记录", avail: "可用性（见「出口与探测」）",
   service_status: "服务状态", dns_leak: "DNS 泄露", ipv6_leak: "IPv6 泄露", udp_leak: "WebRTC/UDP 泄露",
@@ -93,7 +96,7 @@ export const CHECK_TITLES: Record<string, string> = {
 };
 
 export const PARAM_TITLES: Record<string, string> = {
-  allowed_countries: "允许国家（空=不限）", blocked_countries: "禁止国家", min: "最低分",
+  ips: "白名单（每行一个 IP 或网段，# 后写备注）", allowed_countries: "允许国家（空=不限）", blocked_countries: "禁止国家", min: "最低分",
   fail_when_no_data: "无数据时判失败", require_residential: "必须住宅 IP",
   fail_on: "以下状态判失败", must_equal_claude_ip: "UDP 出口须等于应用出口",
   cf_equals_claude: "CF 出口须等于应用出口", mode: "模式 (same_country / exact)",

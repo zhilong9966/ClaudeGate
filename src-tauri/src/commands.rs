@@ -13,12 +13,18 @@ pub fn get_config(state: State<AppState>) -> AppConfig {
 }
 
 #[tauri::command]
-pub fn save_config(state: State<AppState>, cfg: AppConfig) -> R<()> {
+pub fn save_config(handle: AppHandle, state: State<AppState>, cfg: AppConfig) -> R<()> {
     cfg.save(&state.config_path).map_err(|e| {
         log::error!("保存配置失败: {e}");
         e.to_string()
     })?;
     crate::logging::apply(&cfg.general.log);
+    crate::sync_autostart(&handle, cfg.general.autostart);
+    // 防火墙相关开关变化后立即同步一次
+    let h = handle.clone();
+    tauri::async_runtime::spawn(async move {
+        crate::guard::fw_sync(&h).await;
+    });
     log::info!(
         "配置已保存：日志目录 {}，级别 {}，IP 数据源 {}，离线库目录 {}",
         cfg.general.log.dir, cfg.general.log.level, cfg.network.risk_provider, cfg.network.local_db.dir
@@ -81,6 +87,13 @@ pub async fn launch_app(handle: AppHandle, state: State<'_, AppState>, app_id: S
         }
         log::info!("[{app_id}] 启动前复检通过，出口 {baseline}");
     }
+    // 检测通过：解除防火墙阻断并授权联网，然后再启动
+    {
+        let mut fw = state.fw.lock().unwrap();
+        fw.killed.remove(&app_id);
+        fw.authorized.insert(app_id.clone());
+    }
+    crate::guard::fw_sync(&handle).await;
     let msg = crate::launcher::launch(&app.launcher).map_err(|e| {
         log::error!("[{app_id}] 启动失败: {e}");
         e.to_string()
@@ -141,4 +154,67 @@ pub fn create_shortcut() -> R<crate::shortcut::ShortcutInfo> {
         log::error!("创建桌面快捷方式失败: {e}");
         e.to_string()
     })
+}
+
+/// 把某个 IP 加入该应用的固定出口白名单（已存在则忽略）
+#[tauri::command]
+pub fn add_to_allowlist(state: State<AppState>, app_id: String, ip: String, note: String) -> R<AppConfig> {
+    let mut cfg = state.config();
+    let app = cfg.apps.iter_mut().find(|a| a.id == app_id).ok_or("未知应用")?;
+    if !crate::allowlist::ip_in(&crate::allowlist::entries(app), &ip) {
+        let rule = app.checks.get_mut(crate::allowlist::CHECK_ID).ok_or("缺少白名单检测项")?;
+        let mut list = rule.list("ips");
+        list.push(if note.trim().is_empty() { ip.clone() } else { format!("{ip} # {}", note.trim()) });
+        rule.params.insert("ips".into(), serde_json::json!(list));
+        rule.enabled = true;
+        log::info!("[{app_id}] 已把 {ip} 加入固定出口白名单");
+    }
+    cfg.save(&state.config_path).map_err(|e| e.to_string())?;
+    *state.cfg.lock().unwrap() = cfg.clone();
+    Ok(cfg)
+}
+
+#[derive(serde::Serialize)]
+pub struct FirewallStatus {
+    pub supported: bool,
+    pub installed: bool,
+    /// 当前被阻断的应用 id
+    pub blocked: Vec<String>,
+}
+
+#[tauri::command]
+pub async fn firewall_status(state: State<'_, AppState>) -> R<FirewallStatus> {
+    let installed = tauri::async_runtime::spawn_blocking(crate::firewall::installed).await.unwrap_or(false);
+    let blocked = state.fw.lock().unwrap().applied.iter().filter(|(_, a)| a.block).map(|(id, _)| id.clone()).collect();
+    Ok(FirewallStatus { supported: crate::firewall::supported(), installed, blocked })
+}
+
+/// 授权（弹一次 UAC）
+#[tauri::command]
+pub async fn firewall_install(handle: AppHandle) -> R<()> {
+    tauri::async_runtime::spawn_blocking(crate::firewall::install).await.map_err(|e| e.to_string())?.map_err(|e| {
+        log::error!("防火墙断网保护授权失败: {e}");
+        e.to_string()
+    })?;
+    crate::guard::fw_sync(&handle).await;
+    Ok(())
+}
+
+/// 取消授权并清除所有 PureGate 防火墙规则（弹一次 UAC）
+#[tauri::command]
+pub async fn firewall_uninstall(state: State<'_, AppState>) -> R<()> {
+    tauri::async_runtime::spawn_blocking(crate::firewall::uninstall).await.map_err(|e| e.to_string())?.map_err(|e| e.to_string())?;
+    let mut fw = state.fw.lock().unwrap();
+    fw.applied.clear();
+    fw.killed.clear();
+    Ok(())
+}
+
+/// 手动解除某个应用的防火墙阻断（例如确认网络已恢复后）
+#[tauri::command]
+pub async fn firewall_unblock(handle: AppHandle, state: State<'_, AppState>, app_id: String) -> R<()> {
+    state.fw.lock().unwrap().killed.remove(&app_id);
+    log::info!("[{app_id}] 手动解除防火墙阻断");
+    crate::guard::fw_sync(&handle).await;
+    Ok(())
 }

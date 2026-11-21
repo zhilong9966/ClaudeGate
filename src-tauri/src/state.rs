@@ -12,6 +12,8 @@ pub struct AppState {
     pub reports: Mutex<HashMap<String, Report>>,
     /// 每个正在守护的应用的状态（key = 应用 id）
     pub guards: Mutex<HashMap<String, AppGuard>>,
+    /// 防火墙断网保护运行时状态
+    pub fw: Mutex<crate::firewall::FwRuntime>,
 }
 
 impl AppState {

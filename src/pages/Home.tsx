@@ -65,6 +65,14 @@ export default function Home({ appId, appName, active }: { appId: string; appNam
     }
   }
 
+  async function addAllow(ip: string) {
+    try {
+      await api.addToAllowlist(appId, ip, "");
+      setMsg(`已加入 ${appName} 的固定出口白名单：${ip}。以后出口不在名单内将禁止启动 / 自动终止。可在「系统配置 → ${appName} → 检测项」里加备注或增删。`);
+      await start();
+    } catch (e) { setMsg("加入白名单失败：" + e); }
+  }
+
   async function launch() {
     try { setMsg(await api.launch(appId)); } catch (e) { setMsg("启动失败：" + e); }
   }
@@ -113,7 +121,11 @@ export default function Home({ appId, appName, active }: { appId: string; appNam
               <div className="sub">
                 {f.egress ? `${f.risk?.country ?? f.egress.loc} ${f.risk?.as_org ?? ""}` : f.egress_error}
                 {f.egress?.vendor_subnet && <><br />厂商侧看到的网段：{f.egress.vendor_subnet}</>}
-              </div></div>
+              </div>
+              {f.egress && (byId("egress_allowlist")?.status === "pass"
+                ? <div className="sub"><span className="tag ok">在固定 IP 白名单内</span></div>
+                : <button className="btn small" style={{ marginTop: 8 }} onClick={() => addAllow(f.egress!.ip)}>把当前出口加入白名单</button>)}
+            </div>
 
             <div className="card"><div className="card-title">信任评分 (Trust Score)</div>
               <div className="score" style={{ color: scoreColor(f.risk?.trust_score) }}>{f.risk?.trust_score ?? "—"}</div>

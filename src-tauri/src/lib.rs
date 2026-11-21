@@ -1,10 +1,13 @@
+mod allowlist;
 mod commands;
 mod config;
 mod detect;
+mod firewall;
 mod guard;
 mod http;
 mod launcher;
 mod logging;
+mod netwatch;
 mod process;
 mod rules;
 mod shortcut;
@@ -15,6 +18,23 @@ use std::sync::{Mutex, OnceLock};
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, WindowEvent};
+
+/// 让系统的开机自启项与配置一致
+pub(crate) fn sync_autostart(app: &AppHandle, want: bool) {
+    use tauri_plugin_autostart::ManagerExt;
+    let al = app.autolaunch();
+    let now = al.is_enabled().unwrap_or(false);
+    let res = match (want, now) {
+        (true, false) => al.enable(),
+        (false, true) => al.disable(),
+        _ => Ok(()),
+    };
+    match res {
+        Ok(()) if want != now => log::info!("开机自启已{}", if want { "开启（静默进入托盘）" } else { "关闭" }),
+        Ok(()) => {}
+        Err(e) => log::warn!("设置开机自启失败: {e}"),
+    }
+}
 
 /// 显示并聚焦主窗口（托盘点击、再次双击快捷方式时）
 fn show_main(app: &AppHandle) {
@@ -35,6 +55,11 @@ pub(crate) fn default_dirs() -> (Option<String>, Option<String>) {
     }
 }
 
+/// 提权后的防火墙同步程序入口（由计划任务以 `--fw-sync` 调起）
+pub fn firewall_helper() {
+    firewall::helper_main();
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -42,6 +67,8 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_main(app)))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
+        // 开机自启时带 --minimized，直接进托盘
+        .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec!["--minimized"])))
         .setup(|app| {
             let dir = app.path().app_config_dir()?;
             let config_path = dir.join("config.json");
@@ -59,6 +86,7 @@ pub fn run() {
             let _ = cfg.save(&config_path);
 
             logging::init(&cfg.general.log);
+            let cfg_autostart = cfg.general.autostart;
             log::info!("===== PureGate 净启 {} 启动（{} / {}） =====", app.package_info().version, std::env::consts::OS, std::env::consts::ARCH);
             log::info!("配置文件 {}", config_path.display());
             log::info!("日志目录 {}，级别 {}，保留 {} 天", cfg.general.log.dir, cfg.general.log.level, cfg.general.log.retention_days);
@@ -81,6 +109,7 @@ pub fn run() {
                 cfg: Mutex::new(cfg),
                 reports: Mutex::new(HashMap::new()),
                 guards: Mutex::new(HashMap::new()),
+                fw: Mutex::new(firewall::FwRuntime::default()),
             });
 
             // 托盘：关闭窗口后守护继续在后台运行
@@ -106,6 +135,16 @@ pub fn run() {
             }
             tray.build(app)?;
 
+            sync_autostart(app.handle(), cfg_autostart);
+            // 开机自启（--minimized）时不显示窗口，只在托盘里运行
+            let minimized = std::env::args().any(|a| a == "--minimized");
+            if let Some(w) = app.get_webview_window("main") {
+                if minimized {
+                    log::info!("开机自启：静默运行在托盘");
+                } else {
+                    let _ = w.show();
+                }
+            }
             guard::spawn_monitor(app.handle().clone());
             Ok(())
         })
@@ -132,6 +171,11 @@ pub fn run() {
             commands::update_geo_db,
             commands::shortcut_info,
             commands::create_shortcut,
+            commands::add_to_allowlist,
+            commands::firewall_status,
+            commands::firewall_install,
+            commands::firewall_uninstall,
+            commands::firewall_unblock,
         ])
         .build(tauri::generate_context!())
         .expect("error while building PureGate")
